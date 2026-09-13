@@ -1,6 +1,7 @@
 致理．心夥伴－活動報名系統 V11.21.0 正式整合版
 更新時間：2026/09/12 18:33（台灣時間）
 
+
 一、檔案內容
 1. Code.gs：Google Apps Script 後端完整檔案
 2. index.html：GitHub Pages 前端主頁
