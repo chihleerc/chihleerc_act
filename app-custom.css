@@ -274,8 +274,8 @@
         .calendar-month-toolbar button { display: inline-flex; align-items: center; justify-content: center; color: var(--primary); background: #EFF8FF; border: 1px solid #B9DEFF; }
         .calendar-weekdays, .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .35rem; }
         .calendar-weekdays { margin-bottom: .35rem; color: #52677A; font-size: .78rem; font-weight: 800; text-align: center; }
-        .calendar-weekdays span:first-child { color: #B42345; }
-        .calendar-weekdays span:last-child { color: #006B8F; }
+        .calendar-weekdays span:nth-child(6) { color: #006B8F; }
+        .calendar-weekdays span:last-child { color: #B42345; }
         .calendar-day, .calendar-day-blank { min-width: 0; min-height: 5.25rem; border-radius: 10px; }
         .calendar-day {
             position: relative;
@@ -312,8 +312,12 @@
         .calendar-preview-heading h2 { margin-top: .1rem; color: var(--ink); font-size: 1rem; font-weight: 800; }
         .calendar-selected-count { flex: 0 0 auto; padding: .25rem .6rem; color: #075985; background: #FFFFFF; border: 1px solid #7DD3FC; border-radius: 999px; font-size: .7rem; font-weight: 800; white-space: nowrap; }
         .calendar-day-events { display: grid; gap: .75rem; padding: .9rem; overflow: visible; }
-        .calendar-event-card { position: relative; display: block; padding: .85rem; color: inherit; background: #FFFFFF; border: 1px solid #D5E5F2; border-left: 4px solid var(--accent); border-radius: 10px; cursor: pointer; text-decoration: none; }
-        .calendar-event-card:hover { color: inherit; background: #F8FCFF; border-color: #79BFF0; border-left-color: var(--accent); box-shadow: 0 7px 18px rgba(0, 87, 184, .12); transform: translateY(-1px); }
+        .calendar-event-card { position: relative; display: block; padding: .85rem; color: inherit; background: #FFFFFF; border: 1px solid #D5E5F2; border-left-width: 4px; border-radius: 10px; cursor: pointer; text-decoration: none; }
+        .calendar-event-card:hover { color: inherit; background: #F8FCFF; border-color: #79BFF0; box-shadow: 0 7px 18px rgba(0, 87, 184, .12); transform: translateY(-1px); }
+        .calendar-event-card.calendar-accent-inter { border-left-color: #00A86B; }
+        .calendar-event-card.calendar-accent-academic { border-left-color: #E91E63; }
+        .calendar-event-card.calendar-accent-career { border-left-color: #E2A100; }
+        .calendar-event-card.calendar-accent-neutral { border-left-color: #718096; }
         .calendar-event-card:focus-visible { outline: 3px solid var(--focus) !important; outline-offset: 3px !important; }
         .calendar-event-badges { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; margin-bottom: .45rem; }
         .calendar-type-badge { padding: .14rem .45rem; color: #52677A; background: #F2F4F7; border: 1px solid #D5DAE1; border-radius: 999px; font-size: .65rem; font-weight: 800; }

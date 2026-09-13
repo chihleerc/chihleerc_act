@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 致理．心夥伴 - 活動報名系統｜手機導覽 ICON 修正版 V11.21.5｜2026-09-13 13:55 -->
+<!-- 致理．心夥伴 - 活動報名系統｜月曆週次與分類色修正版 V11.21.6｜2026-09-13 18:53 -->
 <html lang="zh-TW" class="frame-guard-pending">
 <head>
     <meta charset="UTF-8">
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
 
-    <link rel="stylesheet" href="app-custom.css?v=11.21.5-20260913">
+    <link rel="stylesheet" href="app-custom.css?v=11.21.6-20260913">
 
 </head>
 <body class="text-gray-800 antialiased min-h-screen flex flex-col relative w-full">
@@ -58,7 +58,6 @@
         <section id="view-calendar" class="hidden animate-fade-in w-full" aria-labelledby="calendar-view-title">
             <div class="calendar-view-heading">
                 <div>
-                    <p class="calendar-eyebrow"><i class="fa-regular fa-calendar-check"></i>快速查看活動日期</p>
                     <h1 id="calendar-view-title">活動月曆</h1>
                     <p>點選日期即可預覽當天活動、場次與剩餘名額，再前往報名。</p>
                 </div>
@@ -72,7 +71,7 @@
                         <h2 id="calendar-month-label" aria-live="polite"></h2>
                         <button type="button" data-action="calendar-next" aria-label="下一個月" title="下一個月"><i class="fa-solid fa-chevron-right"></i></button>
                     </div>
-                    <div class="calendar-weekdays" aria-hidden="true"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
+                    <div class="calendar-weekdays" aria-hidden="true"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
                     <div id="calendar-grid" class="calendar-grid" role="grid" aria-label="活動日期"></div>
                     <div class="calendar-legend" aria-label="活動分類圖例"><span><i class="calendar-dot dot-inter"></i>人際</span><span><i class="calendar-dot dot-academic"></i>課業</span><span><i class="calendar-dot dot-career"></i>職涯</span></div>
                 </section>
@@ -772,7 +771,7 @@
         <div id="loader-text" class="text-base md:text-lg font-bold text-gray-700 tracking-wider bg-white px-4 py-1.5 rounded-full shadow-sm text-center mx-4 border border-gray-100">系統處理中...</div>
     </div>
 
-    <script src="app.js?v=11.21.5-20260913" defer></script>
+    <script src="app.js?v=11.21.6-20260913" defer></script>
 
 </body>
 </html>
