@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 致理．心夥伴 - 活動報名系統｜報名送出防呆與連線確認版 V11.21.9｜2026-09-15 20:34 -->
+<!-- 致理．心夥伴 - 活動報名系統｜漸進載入與快速新增版 V11.21.9｜2026-09-15 21:00 -->
 <html lang="zh-TW" class="frame-guard-pending">
 <head>
     <meta charset="UTF-8">
@@ -154,6 +154,13 @@
                     <div id="student-events-container" class="divide-y divide-gray-200"></div>
                 </div>
 
+                <div id="student-load-more-wrap" class="student-load-more-wrap hidden" aria-live="polite">
+                    <button id="student-load-more-button" type="button" data-action="load-more-public-events">
+                        <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>載入更多活動
+                    </button>
+                    <p id="student-load-more-status"></p>
+                </div>
+
                 <div id="no-events-msg" class="hidden text-center text-gray-500 mt-10 py-10 bg-white rounded-xl shadow-sm border border-gray-200 mx-2">
                     <i class="fa-regular fa-folder-open text-3xl md:text-4xl mb-3 text-gray-300"></i>
                     <p id="no-events-text" class="text-sm md:text-base">目前無任何活動</p>
@@ -198,32 +205,27 @@
 
         <!-- 系統後台：主控台 -->
         <div id="view-teacher-dashboard" class="hidden animate-fade-in w-full px-1">
-            <div class="flex space-x-2 md:space-x-4 mb-4 md:mb-6 border-b pb-2 overflow-x-auto no-scrollbar whitespace-nowrap">
-                <button id="tabQuickCreate" data-action="switch-admin-tab" data-tab="quick" class="font-bold text-gray-800 border-b-2 border-chihlee-blue pb-1 px-2 transition text-sm md:text-base">快速新增</button>
-                <button id="tabActivityList" data-action="switch-admin-tab" data-tab="list" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">活動列表</button>
+            <section id="admin-entry-panel" class="admin-entry-panel hidden" aria-labelledby="admin-entry-title">
+                <div>
+                    <span class="admin-entry-eyebrow"><i class="fa-solid fa-gauge-high" aria-hidden="true"></i>快速入口</span>
+                    <h2 id="admin-entry-title">今天要做什麼？</h2>
+                    <p>登入已完成。新增活動不必先等待完整活動與報名資料。</p>
+                </div>
+                <div class="admin-entry-actions">
+                    <button type="button" data-action="quick-add-event" class="is-primary"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>快速新增活動</span><small>只載入表單必要資料</small></button>
+                    <button type="button" data-action="load-admin-dashboard"><i class="fa-solid fa-list-check" aria-hidden="true"></i><span>管理活動與報名</span><small>需要時才載入完整清單</small></button>
+                </div>
+            </section>
+
+            <div id="admin-tabs-bar" class="hidden flex space-x-2 md:space-x-4 mb-4 md:mb-6 border-b pb-2 overflow-x-auto no-scrollbar whitespace-nowrap">
+                <button id="tabActivityList" data-action="switch-admin-tab" data-tab="list" class="font-bold text-gray-800 border-b-2 border-chihlee-blue pb-1 px-2 transition text-sm md:text-base">活動列表</button>
                 <button id="tabActivityLog" data-action="switch-admin-tab" data-tab="log" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">動態紀錄</button>
                 <button id="tabDataQuality" data-action="switch-admin-tab" data-tab="quality" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">資料檢查</button>
             </div>
 
-            <div id="adminQuickCreateSection" class="w-full">
-                <div class="bg-white rounded-xl shadow-md border border-gray-100 p-4 md:p-6">
-                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                        <div class="min-w-0">
-                            <h2 class="text-lg md:text-xl font-bold text-chihlee-blue"><i class="fa-solid fa-bolt mr-2" aria-hidden="true"></i>快速新增活動</h2>
-                            <p class="text-sm text-gray-600 mt-1 leading-relaxed">直接開啟原本的新增活動表單，不先載入活動列表、歷史報名或動態紀錄。</p>
-                        </div>
-                        <button data-action="open-edit-event" class="w-full md:w-auto bg-chihlee-blue text-white px-5 py-3 rounded-lg shadow hover:bg-opacity-90 transition flex items-center justify-center text-sm md:text-base font-bold flex-shrink-0">
-                            <i class="fa-solid fa-plus mr-2" aria-hidden="true"></i>新增活動
-                        </button>
-                    </div>
-                    <div class="mt-4 rounded-lg border border-blue-100 bg-blue-50 px-3 py-3 text-xs md:text-sm text-blue-900 leading-relaxed">
-                        手機版仍使用既有的新增活動視窗與欄位配置；只有資料載入方式改為需要時才讀取。
-                    </div>
-                </div>
-            </div>
-
             <!-- 骨架屏載入 (後台用) -->
             <div id="skeleton-admin" class="hidden space-y-4 max-w-full">
+                <div class="admin-loading-message"><i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i><div><strong>後台資料載入中</strong><p>正在讀取活動與報名資料，您可以稍候片刻。</p></div></div>
                 <div class="animate-pulse bg-white p-4 rounded-xl border border-gray-200 h-16 w-full mb-4"></div>
                 <div class="animate-pulse bg-white p-5 rounded-xl border border-gray-200 h-96 w-full"></div>
             </div>
@@ -791,6 +793,7 @@
     <div id="global-loader" role="status" aria-live="polite" aria-hidden="true" class="fixed inset-0 bg-white bg-opacity-80 backdrop-blur-sm z-[200] hidden flex flex-col items-center justify-center transition-opacity">
         <i class="fa-solid fa-circle-notch fa-spin text-4xl md:text-5xl text-chihlee-blue mb-4"></i>
         <div id="loader-text" class="text-base md:text-lg font-bold text-gray-700 tracking-wider bg-white px-4 py-1.5 rounded-full shadow-sm text-center mx-4 border border-gray-100">系統處理中...</div>
+        <div id="loader-elapsed" class="loader-elapsed" aria-live="off"></div>
     </div>
 
     <script src="app.js?v=11.21.9-20260915" defer></script>
