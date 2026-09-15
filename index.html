@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 致理．心夥伴 - 活動報名系統｜漸進載入與快速新增版 V11.21.9｜2026-09-15 21:00 -->
+<!-- 致理．心夥伴 - 活動報名系統｜伺服器分頁與身分分離版 V11.21.10｜2026-09-15 23:40 -->
 <html lang="zh-TW" class="frame-guard-pending">
 <head>
     <meta charset="UTF-8">
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
 
-    <link rel="stylesheet" href="app-custom.css?v=11.21.9-20260915">
+    <link rel="stylesheet" href="app-custom.css?v=11.21.10-20260915">
 
 </head>
 <body class="text-gray-800 antialiased min-h-screen flex flex-col relative w-full">
@@ -240,6 +240,11 @@
                             <input type="text" id="teacher-search-input" data-input-action="render-dashboard" placeholder="搜尋活動名稱..." class="w-full border border-gray-300 rounded-md pl-10 pr-3 py-2 text-sm focus:ring-chihlee-blue outline-none bg-white shadow-sm">
                         </div>
                         <div class="flex gap-2 w-full sm:w-auto">
+                            <select id="teacher-scope-filter" data-change-action="load-admin-page" aria-label="活動時間範圍" class="flex-1 sm:flex-none border border-blue-300 rounded-md px-2 py-2 text-sm font-bold text-chihlee-blue focus:ring-chihlee-blue outline-none bg-blue-50 shadow-sm">
+                                <option value="upcoming">即將到來</option>
+                                <option value="expired">已過期活動</option>
+                                <option value="all">全部活動</option>
+                            </select>
                             <select id="teacher-year-filter" data-change-action="render-dashboard" class="flex-1 sm:flex-none border border-gray-300 rounded-md px-2 py-2 text-sm font-medium text-gray-700 focus:ring-chihlee-blue outline-none bg-white shadow-sm"></select>
                             <select id="teacher-category-filter" data-change-action="render-dashboard" class="flex-1 sm:flex-none border border-gray-300 rounded-md px-2 py-2 text-sm font-medium text-gray-700 focus:ring-chihlee-blue outline-none bg-white shadow-sm">
                                 <option value="all">所有分類</option>
@@ -796,7 +801,7 @@
         <div id="loader-elapsed" class="loader-elapsed" aria-live="off"></div>
     </div>
 
-    <script src="app.js?v=11.21.9-20260915" defer></script>
+    <script src="app.js?v=11.21.10-20260915" defer></script>
 
 </body>
 </html>

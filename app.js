@@ -9,7 +9,10 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             studentIdentity: null, registeredEventIds: [], pendingRegistrationIds: {},
             eventCounts: new Map(), calendarYear: null, calendarMonth: null, calendarSelectedDate: '',
             publicPage: 0, publicHasMore: false, publicTotal: 0, publicCategoryCounts: {}, publicLoadingMore: false,
-            adminDataLoaded: false, adminLogsLoaded: false, calendarFullDataLoaded: false
+            adminDataLoaded: false, adminLogsLoaded: false, calendarFullDataLoaded: false,
+            adminPagination: { page: 1, pageSize: 5, total: 0, totalPages: 1, scope: 'upcoming' },
+            adminFilterOptions: { years: [], teachers: [] },
+            adminPageEvents: [], adminPageEventStats: {}, publicEventsSnapshot: [], publicEventStatsSnapshot: {}
         };
 
         let isFormDirty = false;
@@ -161,7 +164,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 'switch-admin-tab': () => switchAdminTab(target.dataset.tab),
                 'quick-add-event': () => quickAddEvent(),
                 'load-admin-dashboard': () => loadAdminDashboard(),
-                'reload-data': () => reloadDataSilently('手動更新資料...'),
+                'reload-data': () => loadAdminDashboard(state.adminCurrentPage || 1, true),
                 'open-edit-event': () => openEditEventModal(eventId || undefined),
                 'choose-event-images': () => document.getElementById('edit-images-input').click(),
                 'close-modal': () => closeModal(target.dataset.modal),
@@ -186,9 +189,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 'confirm-send-line': () => confirmSendLine(),
                 'delete-event': () => deleteAdminEvent(eventId),
                 'toggle-published': () => toggleEventPublished(eventId, target.dataset.published === 'true'),
-                'open-participants': () => window.openParticipantsModal(eventId),
-                'open-notify': () => openNotifyModal(eventId),
-                'dashboard-page': () => renderTeacherDashboard(Number(target.dataset.page) || 1),
+                'open-participants': () => loadEventParticipants(eventId, 'participants'),
+                'open-notify': () => loadEventParticipants(eventId, 'notify'),
+                'dashboard-page': () => loadAdminDashboard(Number(target.dataset.page) || 1, true),
                 'remove-temp-tag': () => { removeTempTag(Number(target.dataset.index)); markDirty(); },
                 'remove-temp-session': () => { removeTempSession(Number(target.dataset.index)); markDirty(); },
                 'remove-temp-image': () => removeTempImage(Number(target.dataset.index)),
@@ -208,10 +211,17 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             else if (action === 'event-edit') submitEventEdit(event);
         });
 
+        let adminFilterTimer = null;
+        let adminDataRequestSequence = 0;
         document.addEventListener('input', event => {
             const target = event.target.closest('[data-input-action]');
             if (!target) return;
-            if (target.dataset.inputAction === 'render-dashboard') renderTeacherDashboard(1);
+            if (target.dataset.inputAction === 'render-dashboard') {
+                if (state.isTeacherLoggedIn && state.adminDataLoaded) {
+                    clearTimeout(adminFilterTimer);
+                    adminFilterTimer = setTimeout(() => loadAdminDashboard(1, true), 350);
+                } else renderTeacherDashboard(1);
+            }
             if (target.dataset.inputAction === 'mark-dirty') markDirty();
         });
 
@@ -219,7 +229,10 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             const target = event.target.closest('[data-change-action]');
             if (!target) return;
             const action = target.dataset.changeAction;
-            if (action === 'render-dashboard') renderTeacherDashboard(1);
+            if (action === 'render-dashboard' || action === 'load-admin-page') {
+                if (state.isTeacherLoggedIn && state.adminDataLoaded) loadAdminDashboard(1, true);
+                else renderTeacherDashboard(1);
+            }
             else if (action === 'mark-dirty') markDirty();
             else if (action === 'activity-type') { handleActivityTypeChange(); markDirty(); }
             else if (action === 'line-template') changeLineTemplate();
@@ -326,6 +339,13 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         function updateEventCounts() {
             state.eventCounts.clear();
             if (state.isTeacherLoggedIn) {
+                if (state.eventStats && Object.keys(state.eventStats).length > 0) {
+                    Object.entries(state.eventStats).forEach(([eventId, stats]) => {
+                        const count = Number(stats && stats.registrationCount);
+                        state.eventCounts.set(String(eventId), Number.isFinite(count) && count >= 0 ? count : 0);
+                    });
+                    return;
+                }
                 (Array.isArray(state.registrations) ? state.registrations : []).forEach(registration => {
                     const hasAttendance = (Array.isArray(registration.sessionsData) ? registration.sessionsData : [])
                         .some(session => session && session.attend === true);
@@ -371,14 +391,19 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         function clearStudentData() {
+            resetStudentSessionState();
+            showToast('本次頁面的學生資料已清除', 'success');
+            renderStudentEvents();
+            loadSavedStudentInfo();
+        }
+
+        function resetStudentSessionState() {
             state.studentIdentity = null;
             state.registeredEventIds = [];
             state.myRegistrations = [];
             state.selectedEventIds = [];
+            state.pendingRegistrationIds = {};
             document.getElementById('student-identity-bar').classList.add('hidden');
-            showToast('本次頁面的學生資料已清除', 'success');
-            renderStudentEvents();
-            loadSavedStudentInfo();
         }
 
         function closeEditEventModal() {
@@ -440,15 +465,16 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         // 固定記錄這一版完成修改的時間，不會因登入、重新整理或查詢資料而改變。
-        const VERSION_LABEL = 'V11.21.9';
-        const VERSION_UPDATED_AT = '2026/09/15 21:00';
-        const VERSION_UPDATED_AT_ISO = '2026-09-15T21:00:00+08:00';
+        const VERSION_LABEL = 'V11.21.10';
+        const VERSION_UPDATED_AT = '2026/09/15 23:40';
+        const VERSION_UPDATED_AT_ISO = '2026-09-15T23:40:00+08:00';
         const API_TIMEOUT_MS = 20000;
         const LOGIN_TIMEOUT_MS = 25000;
         const ADMIN_DATA_TIMEOUT_MS = 45000;
         const PUBLIC_DATA_TIMEOUT_MS = 18000;
         const PUBLIC_DATA_MAX_ATTEMPTS = 2;
         const PUBLIC_PAGE_SIZE = 8;
+        const ADMIN_SESSION_STORAGE_KEY = 'chihlee_admin_session_v11210';
         const MUTATION_TIMEOUT_MS = 60000;
         const STATUS_CHECK_TIMEOUT_MS = 20000;
         const REGISTRATION_SUBMIT_TIMEOUT_MS = 35000;
@@ -508,6 +534,11 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             if (action === 'getAdminFormOptions' && (!isPlainObject(data) || !Array.isArray(data.admins))) throw new Error('承辦人資料格式不正確');
             if (action === 'getAdminLogs' && (!isPlainObject(data) || !Array.isArray(data.logs))) throw new Error('動態紀錄格式不正確');
             if (action === 'getAdminData' && (!isPlainObject(data) || !isPlainObject(data.fullData))) throw new Error('後台資料格式不正確');
+            if (action === 'getAdminDataPage' && (
+                !isPlainObject(data) || !Array.isArray(data.events) || !isPlainObject(data.eventStats) ||
+                !isPlainObject(data.pagination) || data.pagination.pageSize !== 5 || !isPlainObject(data.filterOptions)
+            )) throw new Error('後台活動分頁格式不正確');
+            if (action === 'getAdminEventParticipants' && (!isPlainObject(data) || !Array.isArray(data.registrations))) throw new Error('活動報名名單格式不正確');
             if ((action === 'login' || action === 'loginFast') && (
                 !isPlainObject(data) || typeof data.token !== 'string' || !data.token ||
                 typeof data.name !== 'string' || !['admin', 'staff'].includes(data.role) ||
@@ -550,7 +581,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             )) throw new Error('報名存檔狀態格式不正確');
             if (isPlainObject(data) && data.events !== undefined) {
                 validateEventArray(data.events, '公開');
-                if (!isPlainObject(data.eventStats) || !Array.isArray(data.counselors)) throw new Error('公開資料格式不正確');
+                if (!isPlainObject(data.eventStats) || (action !== 'getAdminDataPage' && !Array.isArray(data.counselors))) throw new Error('公開資料格式不正確');
                 Object.values(data.eventStats).forEach(stats => {
                     if (!isPlainObject(stats) || !Array.isArray(stats.occupiedSessions) || !Array.isArray(stats.sessionStats)) {
                         throw new Error('公開名額統計格式不正確');
@@ -741,6 +772,10 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             });
             state.events = current;
             state.eventStats = reset ? { ...data.eventStats } : { ...state.eventStats, ...data.eventStats };
+            if (state.isTeacherLoggedIn && !document.getElementById('view-student').classList.contains('hidden')) {
+                state.publicEventsSnapshot = state.events.slice();
+                state.publicEventStatsSnapshot = { ...state.eventStats };
+            }
             state.counselors = Array.isArray(data.counselors) ? data.counselors : state.counselors;
             if (data.pagination) {
                 state.publicPage = data.pagination.page;
@@ -860,11 +895,33 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             showToast('活動資料已重新載入', 'success');
         }
 
+        function restoreAdminSessionFromStorage() {
+            try {
+                const saved = JSON.parse(sessionStorage.getItem(ADMIN_SESSION_STORAGE_KEY) || 'null');
+                if (!saved || !saved.acc || !saved.token || !saved.name || !['admin', 'staff'].includes(saved.role)) return false;
+                state.adminCreds = { acc: String(saved.acc), token: String(saved.token) };
+                state.isTeacherLoggedIn = true;
+                state.currentUserRole = saved.role;
+                state.currentUserName = String(saved.name);
+                state.admins = [{ name: state.currentUserName }];
+                resetStudentSessionState();
+                return true;
+            } catch (error) {
+                sessionStorage.removeItem(ADMIN_SESSION_STORAGE_KEY);
+                return false;
+            }
+        }
+
         window.onload = async () => {
             syncPageScrollLock();
             enhanceAccessibility();
             updateVersionTime();
             switchStudentDisplay(state.studentDisplayMode);
+            if (restoreAdminSessionFromStorage()) {
+                switchView('teacherDashboard');
+                showToast(`${state.currentUserName} 的後台登入狀態已恢復`, 'success');
+                return;
+            }
             const loaded = await fetchInitialData();
             if (loaded) renderStudentEvents();
             loadSavedStudentInfo();
@@ -959,8 +1016,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         async function refreshParticipantsModal() {
             const eventId = state.currentAdminEventId;
             if (!eventId) return;
-            const refreshed = await reloadDataSilently('同步最新報名狀態...');
-            if (refreshed) openParticipantsModal(eventId);
+            await loadEventParticipants(eventId, 'participants');
         }
 
         function getEventRegistrationCount(eventId) {
@@ -982,6 +1038,14 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         function getEventSessionCounts(ev) {
             const counts = new Map((Array.isArray(ev && ev.sessions) ? ev.sessions : []).map(session => [getSessionCapacityKey(session), 0]));
             if (state.isTeacherLoggedIn) {
+                const stats = state.eventStats && state.eventStats[String(ev.id)];
+                if (stats && Array.isArray(stats.sessionStats)) {
+                    stats.sessionStats.forEach(session => {
+                        const key = getSessionCapacityKey(session);
+                        if (counts.has(key)) counts.set(key, Math.max(0, Number(session.registrationCount) || 0));
+                    });
+                    return counts;
+                }
                 (Array.isArray(state.registrations) ? state.registrations : []).forEach(registration => {
                     if (String(registration.eventId) !== String(ev.id)) return;
                     (Array.isArray(registration.sessionsData) ? registration.sessionsData : []).forEach(session => {
@@ -1603,6 +1667,14 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 renderActivityCalendar();
                 if (!state.isTeacherLoggedIn && !state.calendarFullDataLoaded) void loadFullCalendarOnDemand();
             } else if (viewName === 'student') {
+                if (state.isTeacherLoggedIn) {
+                    if (state.publicEventsSnapshot.length > 0) {
+                        state.events = state.publicEventsSnapshot;
+                        state.eventStats = state.publicEventStatsSnapshot;
+                        updateEventCounts();
+                        renderStudentEvents();
+                    } else void loadStaffPublicSnapshot();
+                }
                 document.getElementById('view-student').classList.remove('hidden');
                 document.getElementById('nav-student-btn').className = "px-2 md:px-3 py-1.5 md:py-2 rounded-md text-xs md:text-sm font-medium bg-chihlee-gold text-white shadow transition whitespace-nowrap shrink-0";
                 document.getElementById('nav-student-btn').setAttribute('aria-current', 'page');
@@ -1610,6 +1682,11 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 scheduleDescriptionClamp();
             } else if (viewName === 'teacherLogin' || viewName === 'teacherDashboard') {
                 if (state.isTeacherLoggedIn) {
+                    if (state.adminDataLoaded) {
+                        state.events = state.adminPageEvents;
+                        state.eventStats = state.adminPageEventStats;
+                        updateEventCounts();
+                    }
                     document.getElementById('view-teacher-dashboard').classList.remove('hidden');
                     document.getElementById('admin-entry-panel').classList.toggle('hidden', state.adminDataLoaded);
                     document.getElementById('admin-tabs-bar').classList.toggle('hidden', !state.adminDataLoaded);
@@ -1641,6 +1718,27 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
 
         }
 
+        async function loadStaffPublicSnapshot() {
+            try {
+                const response = await apiRequest({ action: 'getPublicDataPage', page: 1, pageSize: PUBLIC_PAGE_SIZE }, PUBLIC_DATA_TIMEOUT_MS);
+                if (!response.success) return;
+                state.publicEventsSnapshot = response.data.events;
+                state.publicEventStatsSnapshot = response.data.eventStats;
+                state.publicPage = response.data.pagination.page;
+                state.publicHasMore = response.data.pagination.hasMore;
+                state.publicTotal = response.data.pagination.total;
+                state.publicCategoryCounts = response.data.pagination.categoryCounts || {};
+                if (!document.getElementById('view-student').classList.contains('hidden')) {
+                    state.events = state.publicEventsSnapshot;
+                    state.eventStats = state.publicEventStatsSnapshot;
+                    updateEventCounts();
+                    renderStudentEvents();
+                }
+            } catch (error) {
+                showToast('公開活動暫時無法載入，後台登入狀態不受影響', 'error');
+            }
+        }
+
         async function loadFullCalendarOnDemand() {
             showGlobalLoading(true, '正在載入完整活動月曆…');
             try {
@@ -1648,6 +1746,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 if (!res.success) throw new Error(res.error || '活動月曆載入失敗');
                 state.events = res.data.events;
                 state.eventStats = res.data.eventStats;
+                state.adminPageEvents = res.data.events;
+                state.adminPageEventStats = res.data.eventStats;
                 state.counselors = res.data.counselors;
                 state.calendarFullDataLoaded = true;
                 state.publicHasMore = false;
@@ -1684,40 +1784,65 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             }
         }
 
-        async function loadAdminDashboard() {
-            if (!state.adminCreds || state.adminDataLoaded) return;
+        async function loadAdminDashboard(page = 1, force = false) {
+            if (!state.adminCreds) return;
+            const requestSequence = ++adminDataRequestSequence;
             document.getElementById('admin-entry-panel').classList.add('hidden');
-            showSkeletonLoading(true);
-            showGlobalLoading(true, '正在載入活動與報名資料…');
-            const slowNotice = startLongRequestNotice('資料量較多，Google 仍在讀取中；不會重複送出請求…', 9000);
+            if (!state.adminDataLoaded) showSkeletonLoading(true);
+            showGlobalLoading(true, '正在載入活動清單（每次 5 項）…');
+            const slowNotice = startLongRequestNotice('Google 仍在讀取活動資料；不會重複送出請求…', 9000);
             try {
+                const scopeSelect = document.getElementById('teacher-scope-filter');
+                const yearSelect = document.getElementById('teacher-year-filter');
+                const categorySelect = document.getElementById('teacher-category-filter');
+                const teacherSelect = document.getElementById('teacher-name-filter');
+                const searchInput = document.getElementById('teacher-search-input');
                 const res = await apiRequest({
-                    action: 'getAdminData',
+                    action: 'getAdminDataPage',
+                    page: Math.max(1, Number(page) || 1),
+                    pageSize: 5,
+                    scope: scopeSelect ? scopeSelect.value : 'upcoming',
+                    year: yearSelect && yearSelect.value ? yearSelect.value : 'all',
+                    category: categorySelect && categorySelect.value ? categorySelect.value : 'all',
+                    teacher: teacherSelect && teacherSelect.value ? teacherSelect.value : 'all',
+                    search: searchInput ? searchInput.value.trim() : '',
                     adminAcc: state.adminCreds.acc,
                     adminToken: state.adminCreds.token
                 }, ADMIN_DATA_TIMEOUT_MS);
+                if (requestSequence !== adminDataRequestSequence) return false;
                 if (checkTokenExpiration(res)) return;
                 if (!res.success) throw new Error(res.error || '後台資料載入失敗');
-                const fullData = res.data.fullData;
-                state.events = fullData.events;
-                state.registrations = normalizeRegistrations(fullData.registrations);
-                state.logs = [];
-                state.admins = fullData.admins;
-                state.lineUsage = fullData.lineUsage;
+                state.events = res.data.events;
+                state.eventStats = res.data.eventStats;
+                state.adminPageEvents = res.data.events.slice();
+                state.adminPageEventStats = { ...res.data.eventStats };
+                state.registrations = [];
+                state.admins = res.data.admins;
+                state.lineUsage = res.data.lineUsage;
+                state.adminPagination = res.data.pagination;
+                state.adminFilterOptions = res.data.filterOptions;
+                state.adminCurrentPage = res.data.pagination.page;
                 state.adminDataLoaded = true;
-                state.adminLogsLoaded = false;
                 updateEventCounts();
                 document.getElementById('admin-tabs-bar').classList.remove('hidden');
                 switchAdminTab('list');
                 renderTeacherDashboard();
-                showToast('後台活動與報名資料載入完成', 'success');
+                if (!force) {
+                    const scopeLabels = { upcoming: '即將到來的活動', expired: '已過期活動', all: '全部活動' };
+                    showToast(`${scopeLabels[res.data.pagination.scope] || '活動'}已載入`, 'success');
+                }
+                return true;
             } catch (error) {
-                document.getElementById('admin-entry-panel').classList.remove('hidden');
+                if (requestSequence !== adminDataRequestSequence) return false;
+                if (!state.adminDataLoaded) document.getElementById('admin-entry-panel').classList.remove('hidden');
                 showToast(`後台資料尚未載入：${getRequestErrorMessage(error)}。可先使用「快速新增活動」。`, 'error');
+                return false;
             } finally {
                 clearTimeout(slowNotice);
-                showSkeletonLoading(false);
-                showGlobalLoading(false);
+                if (requestSequence === adminDataRequestSequence) {
+                    showSkeletonLoading(false);
+                    showGlobalLoading(false);
+                }
             }
         }
 
@@ -1753,6 +1878,10 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     state.adminDataLoaded = false;
                     state.adminLogsLoaded = false;
                     state.admins = [{ name: user.name }];
+                    state.publicEventsSnapshot = state.events.slice();
+                    state.publicEventStatsSnapshot = { ...state.eventStats };
+                    resetStudentSessionState();
+                    sessionStorage.setItem(ADMIN_SESSION_STORAGE_KEY, JSON.stringify({ acc, token: user.token, name: user.name, role: user.role }));
                     document.getElementById('admin-account').value = '';
                     document.getElementById('admin-password').value = '';
 
@@ -1766,6 +1895,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     updateVersionTime();
                     switchView('teacherDashboard');
                     showToast(`${user.name} 登入成功，可直接新增活動或載入管理清單`, 'success');
+                    void apiRequest({ action: 'recordLogin', adminAcc: acc, adminToken: user.token }, 12000).catch(() => {});
                 } else {
                     if (errorMsgEl) { errorMsgEl.innerText = res.error || '帳號或密碼錯誤，請重新確認'; errorMsgEl.classList.remove('hidden'); }
                     showToast(res.error || '帳號或密碼錯誤', 'error');
@@ -1796,7 +1926,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 }
             }
             state.adminCreds = null; state.isTeacherLoggedIn = false; state.currentUserRole = null; state.currentUserName = null;
+            sessionStorage.removeItem(ADMIN_SESSION_STORAGE_KEY);
             state.adminDataLoaded = false; state.adminLogsLoaded = false;
+            state.adminPageEvents = []; state.adminPageEventStats = {}; state.publicEventsSnapshot = []; state.publicEventStatsSnapshot = {};
             state.events = []; state.eventStats = {}; state.counselors = []; state.registrations = []; state.logs = []; state.admins = [];
             showToast('已安全登出', 'info'); switchView('student');
             await fetchInitialData(); renderStudentEvents();
@@ -2792,7 +2924,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 state.archivePreview = null;
                 renderArchivePreview(null);
                 showToast(`${year} 年歸檔完成：活動 ${result.eventCount}、報名 ${result.registrationCount}、紀錄 ${result.logCount} 筆`, 'success');
-                await reloadDataSilently('更新歸檔後資料...');
+                await loadAdminDashboard(1, true);
                 await loadDataQualityReport();
             } catch (error) {
                 showToast(getRequestErrorMessage(error, '年度歸檔失敗；原資料會保留'), 'error');
@@ -2873,19 +3005,16 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
 
         function renderTeacherDashboard(page = null) {
             if (page !== null) state.adminCurrentPage = page;
-            const searchInput = document.getElementById('teacher-search-input').value.trim().toLowerCase();
             const yearSelect = document.getElementById('teacher-year-filter'); const categorySelect = document.getElementById('teacher-category-filter'); const teacherSelect = document.getElementById('teacher-name-filter');
 
-            if(yearSelect.options.length === 0) {
-                let years = [...new Set(state.events.filter(e => e.sessions && e.sessions.length > 0).map(ev => String(ev.sessions[0].date).split('/')[0]))].sort((a,b)=>b-a);
-                const currentY = String(getTaiwanDateParts().year);
-                yearSelect.innerHTML = `<option value="all">全部年度</option>` + years.map(y => `<option value="${escapeHTML(y)}">${escapeHTML(y)}</option>`).join('');
-                if (years.includes(currentY)) yearSelect.value = currentY; else if(years.length > 0) yearSelect.value = years[0];
-            }
-            const currentTeacherVal = teacherSelect.value || 'all'; const teachers = [...new Set(state.events.map(ev => ev.teacher).filter(t => t))].sort();
-            teacherSelect.innerHTML = `<option value="all">承辦人(全部)</option>` + teachers.map(t => `<option value="${escapeHTML(t)}" ${t===currentTeacherVal?'selected':''}>${escapeHTML(t)}</option>`).join('');
-
-            const currentYear = yearSelect.value || 'all'; const currentCat = categorySelect.value || 'all'; const currentTeacher = teacherSelect.value || 'all';
+            const currentYear = yearSelect.value || 'all';
+            const years = Array.isArray(state.adminFilterOptions.years) ? state.adminFilterOptions.years : [];
+            yearSelect.innerHTML = `<option value="all">全部年度</option>` + years.map(year => `<option value="${escapeHTML(year)}">${escapeHTML(year)}</option>`).join('');
+            yearSelect.value = years.includes(currentYear) ? currentYear : 'all';
+            const currentTeacher = teacherSelect.value || 'all';
+            const teachers = Array.isArray(state.adminFilterOptions.teachers) ? state.adminFilterOptions.teachers : [];
+            teacherSelect.innerHTML = `<option value="all">承辦人(全部)</option>` + teachers.map(teacher => `<option value="${escapeHTML(teacher)}">${escapeHTML(teacher)}</option>`).join('');
+            teacherSelect.value = teachers.includes(currentTeacher) ? currentTeacher : 'all';
             const tbody = document.getElementById('teacher-events-tbody'); tbody.innerHTML = '';
             const today = getTodayStart();
 
@@ -2901,30 +3030,11 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 return active ? parseTaiwanDateTime(active.date) : (parseTaiwanDateTime(ev.sessions[ev.sessions.length - 1].date) || new Date(0));
             };
 
-            const mappedEvents = state.events.map(ev => ({
-                ev: ev,
-                isPast: (!ev.sessions || ev.sessions.length === 0) ? true : isEventFullyExpired(ev, today),
-                activeDate: (!ev.sessions || ev.sessions.length === 0) ? new Date(0) : getActiveSessionDate(ev, today)
-            }));
-
-            mappedEvents.sort((a, b) => {
-                if(!a.ev.sessions || a.ev.sessions.length === 0) return 1; if(!b.ev.sessions || b.ev.sessions.length === 0) return -1;
-                if (a.isPast && !b.isPast) return 1; if (!a.isPast && b.isPast) return -1;
-                return a.activeDate - b.activeDate;
-            });
-            const sortedEvents = mappedEvents.map(item => item.ev);
-
-            let filteredEvents = sortedEvents.filter(ev => {
-                if(!ev.sessions || ev.sessions.length === 0) return false;
-                if(currentYear !== 'all' && String(ev.sessions[0].date).split('/')[0] !== currentYear) return false;
-                if(currentCat !== 'all' && ev.category !== currentCat) return false;
-                if(currentTeacher !== 'all' && ev.teacher !== currentTeacher) return false;
-                if(searchInput && !String(ev.title).toLowerCase().includes(searchInput)) return false; return true;
-            });
-
-            const itemsPerPage = 10; const totalPages = Math.ceil(filteredEvents.length / itemsPerPage) || 1;
-            if (state.adminCurrentPage > totalPages) state.adminCurrentPage = totalPages;
-            const startIndex = (state.adminCurrentPage - 1) * itemsPerPage; const paginatedEvents = filteredEvents.slice(startIndex, startIndex + itemsPerPage);
+            const paginatedEvents = state.events;
+            const itemsPerPage = 5;
+            const totalPages = Math.max(1, Number(state.adminPagination.totalPages) || 1);
+            const totalItems = Math.max(0, Number(state.adminPagination.total) || 0);
+            const startIndex = (state.adminCurrentPage - 1) * itemsPerPage;
 
             paginatedEvents.forEach(ev => {
                 if(!ev.sessions || ev.sessions.length === 0) return;
@@ -3006,10 +3116,10 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             });
 
             const paginationContainer = document.getElementById('admin-pagination-container');
-            if(filteredEvents.length > 0) {
+            if(paginatedEvents.length > 0) {
                 paginationContainer.classList.remove('hidden');
                 paginationContainer.innerHTML = `
-                    <div class="text-sm text-gray-600">顯示 ${startIndex + 1} - ${Math.min(startIndex + itemsPerPage, filteredEvents.length)} / 共 <span class="font-bold text-chihlee-blue">${filteredEvents.length}</span></div>
+                    <div class="text-sm text-gray-600">顯示 ${startIndex + 1} - ${Math.min(startIndex + paginatedEvents.length, totalItems)} / 共 <span class="font-bold text-chihlee-blue">${totalItems}</span></div>
                     <div class="flex space-x-2 mt-2 sm:mt-0">
                         <button data-action="dashboard-page" data-page="${state.adminCurrentPage - 1}" ${state.adminCurrentPage === 1 ? 'disabled class="px-3 py-1.5 rounded-md border border-gray-200 text-gray-400 bg-gray-50 cursor-not-allowed"' : 'class="px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 transition"'}><i class="fa-solid fa-chevron-left text-xs mr-1"></i>上一頁</button>
                         <span class="px-3 md:px-4 py-1.5 rounded-md bg-chihlee-blue text-white text-sm font-medium shadow-sm">${state.adminCurrentPage} / ${totalPages}</span>
@@ -3579,7 +3689,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     resetDirty();
                     showToast(id ? '活動與圖片儲存成功！' : '活動已建立為未公開草稿！', 'success');
                     closeEditEventModal();
-                    if (state.adminDataLoaded) renderTeacherDashboard(1);
+                    if (state.adminDataLoaded) void loadAdminDashboard(1, true);
                 }
                 else showToast('儲存失敗：' + res.error, 'error');
             } catch (err) {
@@ -3675,7 +3785,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     if (checkTokenExpiration(res)) return;
                     if (res.success) {
                         showToast('活動已刪除', 'success');
-                        await reloadDataSilently('同步中...');
+                        await loadAdminDashboard(state.adminCurrentPage, true);
                     } else showToast('刪除失敗', 'error');
                 } catch(e) { showToast(getRequestErrorMessage(e), 'error'); }
                 finally { showGlobalLoading(false); }
@@ -3698,9 +3808,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     if (checkTokenExpiration(res)) return;
                     if (res.success) {
                         showToast('已刪除，名額釋放', 'success');
-                        await reloadDataSilently('同步中...');
+                        await loadAdminDashboard(state.adminCurrentPage, true);
                         if (!document.getElementById('modal-participants').classList.contains('hidden')) {
-                            openParticipantsModal(state.currentAdminEventId);
+                            await loadEventParticipants(state.currentAdminEventId, 'participants');
                         }
                     } else {
                         showToast('刪除失敗', 'error');
@@ -3885,9 +3995,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 if (checkTokenExpiration(res)) return;
                 if (res.success) {
                     closeModal('modal-admin-add-participant');
-                    await reloadDataSilently('同步報名資料...');
+                    await loadAdminDashboard(state.adminCurrentPage, true);
                     if (!document.getElementById('modal-participants').classList.contains('hidden')) {
-                        openParticipantsModal(state.currentAdminEventId);
+                        await loadEventParticipants(state.currentAdminEventId, 'participants');
                     }
                     showToast('新增成功！', 'success');
                 }
@@ -4069,9 +4179,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     reg.adminRemark = newRemark; reg.sessionsData = newSessionsData;
                     closeModal('modal-remark');
                     showToast('資料已更新', 'success');
-                    await reloadDataSilently('同步資料狀態...');
+                    await loadAdminDashboard(state.adminCurrentPage, true);
                     if (!document.getElementById('modal-participants').classList.contains('hidden')) {
-                        openParticipantsModal(state.currentAdminEventId);
+                        await loadEventParticipants(state.currentAdminEventId, 'participants');
                     }
                 }
                 else showToast(res.error || '更新失敗', 'error');
@@ -4320,8 +4430,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     } else {
                         showToast(`發送失敗！(請檢查 LINE ID)`, 'error');
                     }
-                    await reloadDataSilently('更新通知狀態...');
-                    openNotifyModal(state.currentAdminEventId);
+                    await loadAdminDashboard(state.adminCurrentPage, true);
+                    await loadEventParticipants(state.currentAdminEventId, 'notify');
                 } else showToast('發送失敗：' + res.error, 'error');
             } catch(e) { showToast(getRequestErrorMessage(e), 'error'); }
             finally {
@@ -4330,6 +4440,31 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     sendBtn.classList.remove('opacity-70', 'cursor-not-allowed');
                     sendBtn.innerHTML = '<i class="fa-solid fa-paper-plane mr-2"></i>發送推播';
                 }
+                showGlobalLoading(false);
+            }
+        }
+
+        async function loadEventParticipants(eventId, destination = 'participants') {
+            if (!state.adminCreds) return;
+            showGlobalLoading(true, destination === 'notify' ? '正在載入通知名單…' : '正在載入報名名單…');
+            try {
+                const response = await apiRequest({
+                    action: 'getAdminEventParticipants',
+                    eventId: String(eventId),
+                    adminAcc: state.adminCreds.acc,
+                    adminToken: state.adminCreds.token
+                }, ADMIN_DATA_TIMEOUT_MS);
+                if (checkTokenExpiration(response)) return;
+                if (!response.success) throw new Error(response.error || '報名名單載入失敗');
+                state.registrations = state.registrations
+                    .filter(registration => String(registration.eventId) !== String(eventId))
+                    .concat(normalizeRegistrations(response.data.registrations));
+                if (response.data.lineUsage) state.lineUsage = response.data.lineUsage;
+                if (destination === 'notify') window.openNotifyModal(eventId);
+                else window.openParticipantsModal(eventId);
+            } catch (error) {
+                showToast(getRequestErrorMessage(error, '報名名單暫時無法載入'), 'error');
+            } finally {
                 showGlobalLoading(false);
             }
         }
