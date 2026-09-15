@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 致理．心夥伴 - 活動報名系統｜月曆週次與分類色修正版 V11.21.6｜2026-09-13 18:53 -->
+<!-- 致理．心夥伴 - 活動報名系統｜報名送出防呆與連線確認版 V11.21.8｜2026-09-15 14:37 -->
 <html lang="zh-TW" class="frame-guard-pending">
 <head>
     <meta charset="UTF-8">
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
 
-    <link rel="stylesheet" href="app-custom.css?v=11.21.6-20260913">
+    <link rel="stylesheet" href="app-custom.css?v=11.21.8-20260915">
 
 </head>
 <body class="text-gray-800 antialiased min-h-screen flex flex-col relative w-full">
@@ -94,7 +94,11 @@
             <div class="mb-6 md:mb-8 text-center relative px-2">
                 <h1 class="text-2xl md:text-3xl font-bold text-chihlee-blue mb-2">近期活動</h1>
                 <p class="text-sm md:text-base text-gray-600">查看日期與剩餘名額，勾選活動後即可一次完成報名。</p>
-                <div class="student-steps" aria-label="報名流程">
+                <button type="button" class="student-steps-toggle" data-action="toggle-student-steps" aria-expanded="false" aria-controls="student-steps-list">
+                    <span><i class="fa-solid fa-circle-info" aria-hidden="true"></i>報名說明</span>
+                    <i class="fa-solid fa-chevron-down student-steps-chevron" aria-hidden="true"></i>
+                </button>
+                <div id="student-steps-list" class="student-steps" aria-label="報名流程">
                     <span><b>1</b>瀏覽並勾選活動</span><span><b>2</b>填寫基本資料</span><span><b>3</b>確認送出報名</span>
                 </div>
                 <div id="student-identity-bar" class="hidden mx-auto mt-4 px-3 md:px-4 py-2 bg-red-50 border border-red-100 rounded-lg text-xs md:text-sm text-red-800 flex justify-center items-center gap-2 md:gap-3 shadow-sm transition-all w-fit max-w-full flex-wrap">
@@ -771,7 +775,7 @@
         <div id="loader-text" class="text-base md:text-lg font-bold text-gray-700 tracking-wider bg-white px-4 py-1.5 rounded-full shadow-sm text-center mx-4 border border-gray-100">系統處理中...</div>
     </div>
 
-    <script src="app.js?v=11.21.6-20260913" defer></script>
+    <script src="app.js?v=11.21.8-20260915" defer></script>
 
 </body>
 </html>

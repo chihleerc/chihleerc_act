@@ -3,10 +3,10 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         let state = {
             isTeacherLoggedIn: false, currentUserRole: null, currentUserName: null, currentFilter: '全部', studentDisplayMode: 'list',
             selectedEventIds: [], currentAdminEventId: null, currentRemarkStudent: null,
-            tempTags: [], tempSessions: [], tempImages: [], tempImagesChanged: false, adminCurrentPage: 1, editingRegId: null,
+            tempTags: [], tempSessions: [], tempImages: [], tempImagesChanged: false, pendingEventCreateId: '', adminCurrentPage: 1, editingRegId: null,
             events: [], eventStats: {}, counselors: [], registrations: [], admins: [], logs: [], adminCreds: null, adminAddTempStudent: null, myRegistrations: [],
             lineUsage: { month: '', used: 0, limit: 200, remaining: 200 }, dataQualityReport: null, archivePreview: null,
-            studentIdentity: null, registeredEventIds: [],
+            studentIdentity: null, registeredEventIds: [], pendingRegistrationIds: {},
             eventCounts: new Map(), calendarYear: null, calendarMonth: null, calendarSelectedDate: ''
         };
 
@@ -140,6 +140,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             }
             const actions = {
                 'switch-view': () => switchView(target.dataset.view),
+                'toggle-student-steps': () => toggleStudentSteps(),
                 'calendar-prev': () => changeCalendarMonth(-1),
                 'calendar-next': () => changeCalendarMonth(1),
                 'calendar-today': () => resetCalendarToToday(),
@@ -379,6 +380,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             releaseTempImagePreviews();
             state.tempImages = [];
             state.tempImagesChanged = false;
+            state.pendingEventCreateId = '';
             closeModal('modal-edit-event');
         }
         function safeCloseEditEvent() { if (isFormDirty) { customConfirm('您有尚未儲存的變更，確定要放棄並離開嗎？', () => { resetDirty(); closeEditEventModal(); }); } else closeEditEventModal(); }
@@ -409,19 +411,52 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         // 固定記錄這一版完成修改的時間，不會因登入、重新整理或查詢資料而改變。
-        const VERSION_LABEL = 'V11.21.6';
-        const VERSION_UPDATED_AT = '2026/09/13 18:53';
-        const VERSION_UPDATED_AT_ISO = '2026-09-13T18:53:00+08:00';
+        const VERSION_LABEL = 'V11.21.8';
+        const VERSION_UPDATED_AT = '2026/09/15 14:37';
+        const VERSION_UPDATED_AT_ISO = '2026-09-15T14:37:00+08:00';
         const API_TIMEOUT_MS = 20000;
+        const LOGIN_TIMEOUT_MS = 45000;
+        const ADMIN_DATA_TIMEOUT_MS = 60000;
         const PUBLIC_DATA_TIMEOUT_MS = 25000;
         const PUBLIC_DATA_MAX_ATTEMPTS = 3;
-        const MUTATION_TIMEOUT_MS = 45000;
+        const MUTATION_TIMEOUT_MS = 60000;
         const STATUS_CHECK_TIMEOUT_MS = 20000;
+        const REGISTRATION_SUBMIT_TIMEOUT_MS = 35000;
+        const REGISTRATION_STATUS_TIMEOUT_MS = 15000;
         const IMAGE_UPLOAD_TIMEOUT_MS = 60000;
         const MAX_EVENT_IMAGES = 3;
         const MAX_IMAGE_SOURCE_BYTES = 5 * 1024 * 1024;
         const TARGET_IMAGE_BYTES = 550 * 1024;
         let initialDataRequestPromise = null;
+
+        function createRequestId() {
+            if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+            const randomBytes = new Uint8Array(16);
+            if (window.crypto && typeof window.crypto.getRandomValues === 'function') window.crypto.getRandomValues(randomBytes);
+            else for (let i = 0; i < randomBytes.length; i++) randomBytes[i] = Math.floor(Math.random() * 256);
+            randomBytes[6] = (randomBytes[6] & 0x0f) | 0x40;
+            randomBytes[8] = (randomBytes[8] & 0x3f) | 0x80;
+            const hex = Array.from(randomBytes, byte => byte.toString(16).padStart(2, '0'));
+            return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10).join('')}`;
+        }
+
+        function startLongRequestNotice(delayedText, delayMs = 10000) {
+            return setTimeout(() => {
+                const loader = document.getElementById('global-loader');
+                const loaderText = document.getElementById('loader-text');
+                if (loader && loaderText && !loader.classList.contains('hidden')) loaderText.innerText = delayedText;
+            }, delayMs);
+        }
+
+        async function requestWithOneTimeoutRetry(payload, timeoutMs, retryText) {
+            try {
+                return await apiRequest(payload, timeoutMs);
+            } catch (error) {
+                if (!error || error.code !== 'REQUEST_TIMEOUT') throw error;
+                showGlobalLoading(true, retryText || '連線時間較長，正在安全確認結果…');
+                return apiRequest(payload, timeoutMs);
+            }
+        }
 
         function isPlainObject(value) {
             return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -446,9 +481,10 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             const data = response.data;
             if (action === 'getPublicData' && !isPlainObject(data)) throw new Error('公開資料格式不正確');
             if (action === 'getAdminData' && (!isPlainObject(data) || !isPlainObject(data.fullData))) throw new Error('後台資料格式不正確');
-            if (action === 'login' && (
+            if ((action === 'login' || action === 'loginFast') && (
                 !isPlainObject(data) || typeof data.token !== 'string' || !data.token ||
-                typeof data.name !== 'string' || !['admin', 'staff'].includes(data.role) || !isPlainObject(data.fullData)
+                typeof data.name !== 'string' || !['admin', 'staff'].includes(data.role) ||
+                (action === 'login' && !isPlainObject(data.fullData))
             )) throw new Error('登入資料格式不正確');
             if (action === 'queryStudent' && !Array.isArray(data)) throw new Error('查詢結果格式不正確');
             if (action === 'lookupStudentForAdminRegistration' && (
@@ -478,6 +514,13 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             if (action === 'getEventPublishedStatus' && (
                 !isPlainObject(data) || typeof data.eventId !== 'string' || typeof data.isPublished !== 'boolean'
             )) throw new Error('活動公開狀態格式不正確');
+            if (action === 'getEventSaveStatus' && (
+                !isPlainObject(data) || typeof data.eventId !== 'string' || typeof data.exists !== 'boolean'
+            )) throw new Error('活動存檔狀態格式不正確');
+            if (action === 'getRegistrationSaveStatus' && (
+                !isPlainObject(data) || !Array.isArray(data.savedRegistrationIds) ||
+                data.savedRegistrationIds.some(id => typeof id !== 'string')
+            )) throw new Error('報名存檔狀態格式不正確');
             if (isPlainObject(data) && data.events !== undefined) {
                 validateEventArray(data.events, '公開');
                 if (!isPlainObject(data.eventStats) || !Array.isArray(data.counselors)) throw new Error('公開資料格式不正確');
@@ -751,9 +794,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             showGlobalLoading(true, loadingText);
             const syncErrors = [];
             try {
-                const publicRequest = apiRequest({ action: 'getPublicData' });
+                const publicRequest = apiRequest({ action: 'getPublicData' }, PUBLIC_DATA_TIMEOUT_MS);
                 const adminRequest = state.isTeacherLoggedIn && state.adminCreds
-                    ? apiRequest({ action: 'getAdminData', adminAcc: state.adminCreds.acc, adminToken: state.adminCreds.token })
+                    ? apiRequest({ action: 'getAdminData', adminAcc: state.adminCreds.acc, adminToken: state.adminCreds.token }, ADMIN_DATA_TIMEOUT_MS)
                     : Promise.resolve(null);
                 const [publicResult, adminResult] = await Promise.allSettled([publicRequest, adminRequest]);
 
@@ -1407,20 +1450,45 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             return null;
         }
 
-        function customConfirm(message, onConfirm, title = '確認操作') {
+        function registrationMatchesSubmittedPayload(registration, payload) {
+            if (!registration || !payload || String(registration.eventId) !== String(payload.eventId)) return false;
+            const toSessionKeys = sessions => (Array.isArray(sessions) ? sessions : [])
+                .filter(session => session && session.attend === true)
+                .map(session => `${String(session.date || '')}|${String(session.time || '')}|${String(session.meal || '不用餐')}`)
+                .sort();
+            const savedKeys = toSessionKeys(registration.sessionsData);
+            const requestedKeys = toSessionKeys(payload.sessionsData);
+            return savedKeys.length === requestedKeys.length && savedKeys.every((key, index) => key === requestedKeys[index]);
+        }
+
+        function customConfirm(message, onConfirm, title = '確認操作', options = {}) {
             document.getElementById('confirm-title').innerText = title;
             document.getElementById('confirm-msg-text').innerHTML = message;
             const modal = document.getElementById('modal-confirm');
+            const cancelButton = document.getElementById('btn-confirm-cancel');
+            const confirmButton = document.getElementById('btn-confirm-ok');
+            cancelButton.innerText = options.cancelText || '取消';
+            confirmButton.innerText = options.confirmText || '確定';
             openModal('modal-confirm');
 
-            document.getElementById('btn-confirm-cancel').onclick = () => {
+            cancelButton.onclick = () => {
                 closeModal('modal-confirm');
+                if (typeof options.onCancel === 'function') options.onCancel();
             };
 
-            document.getElementById('btn-confirm-ok').onclick = () => {
+            confirmButton.onclick = () => {
                 closeModal('modal-confirm');
                 onConfirm();
             };
+        }
+
+        function toggleStudentSteps() {
+            const button = document.querySelector('[data-action="toggle-student-steps"]');
+            const steps = document.getElementById('student-steps-list');
+            if (!button || !steps) return;
+            const expanded = button.getAttribute('aria-expanded') === 'true';
+            button.setAttribute('aria-expanded', String(!expanded));
+            steps.classList.toggle('is-expanded', !expanded);
         }
 
         function switchView(viewName) {
@@ -1485,36 +1553,67 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 loginBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i>登入中...';
             }
             showGlobalLoading(true, '安全連線驗證中...');
+            const slowLoginNotice = startLongRequestNotice('Google 服務回應較慢，仍在安全驗證中…');
 
             try {
-                const res = await apiRequest({ action: 'login', account: acc, password: pwd });
+                const res = await requestWithOneTimeoutRetry(
+                    { action: 'loginFast', account: acc, password: pwd },
+                    LOGIN_TIMEOUT_MS,
+                    '第一次連線未完成，正在重新驗證…'
+                );
                 if (res.success) {
                     const user = res.data;
 
-                    // 登入回應已包含完整後台資料；先顯示後台，再於背景更新公開統計，
-                    // 避免登入成功後又等待第二次完整資料讀取。
+                    // 先完成帳密驗證並進入後台，再分段載入管理資料；
+                    // 避免資料量增加或 GAS 冷啟動時，讓使用者誤以為登入失敗。
                     state.adminCreds = { acc, token: user.token };
                     state.isTeacherLoggedIn = true;
                     state.currentUserRole = user.role;
                     state.currentUserName = user.name;
-                    state.events = user.fullData.events;
-                    state.registrations = normalizeRegistrations(user.fullData.registrations);
-                    state.logs = user.fullData.logs;
-                    state.admins = user.fullData.admins;
-                    state.lineUsage = user.fullData.lineUsage;
                     document.getElementById('admin-account').value = '';
                     document.getElementById('admin-password').value = '';
-
-                    updateEventCounts();
 
                     document.getElementById('teacher-search-input').value = '';
                     document.getElementById('teacher-year-filter').innerHTML = '';
                     document.getElementById('teacher-category-filter').value = 'all';
                     document.getElementById('teacher-name-filter').innerHTML = '';
 
-                    if (e && e.target && e.target.tagName === 'FORM') showToast(`${user.name} 登入成功！`, 'success');
-                    updateVersionTime(); switchView('teacherDashboard');
-                    void refreshPublicSnapshotInBackground();
+                    clearTimeout(slowLoginNotice);
+                    showGlobalLoading(false);
+                    updateVersionTime();
+                    switchView('teacherDashboard');
+                    showSkeletonLoading(true);
+                    showToast(`${user.name} 登入成功，正在載入後台資料`, 'success');
+
+                    const adminPayload = {
+                        action: 'getAdminData',
+                        adminAcc: state.adminCreds.acc,
+                        adminToken: state.adminCreds.token
+                    };
+                    try {
+                        const adminResult = await requestWithOneTimeoutRetry(
+                            adminPayload,
+                            ADMIN_DATA_TIMEOUT_MS,
+                            '後台資料較多，正在重新載入…'
+                        );
+                        if (checkTokenExpiration(adminResult)) return;
+                        if (!adminResult.success) throw new Error(adminResult.error || '後台資料載入失敗');
+                        const fullData = adminResult.data.fullData;
+                        state.events = fullData.events;
+                        state.registrations = normalizeRegistrations(fullData.registrations);
+                        state.logs = fullData.logs;
+                        state.admins = fullData.admins;
+                        state.lineUsage = fullData.lineUsage;
+                        updateEventCounts();
+                        renderTeacherDashboard();
+                        showToast('後台資料載入完成', 'success');
+                        void refreshPublicSnapshotInBackground();
+                    } catch (loadError) {
+                        showToast(`已登入，但後台資料尚未載入：${getRequestErrorMessage(loadError)}。請點「重整」再試一次。`, 'error');
+                    } finally {
+                        showSkeletonLoading(false);
+                        showGlobalLoading(false);
+                    }
                 } else {
                     if (errorMsgEl) { errorMsgEl.innerText = res.error || '帳號或密碼錯誤，請重新確認'; errorMsgEl.classList.remove('hidden'); }
                     showToast(res.error || '帳號或密碼錯誤', 'error');
@@ -1525,6 +1624,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 if (errorMsgEl) { errorMsgEl.innerText = message; errorMsgEl.classList.remove('hidden'); }
                 showToast(message, 'error');
             } finally {
+                clearTimeout(slowLoginNotice);
                 if (loginBtn) {
                     loginBtn.disabled = false;
                     loginBtn.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -1991,6 +2091,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             });
 
             state.selectedEventIds = finalValidIds; if (hasFullError) renderStudentEvents(); if (state.selectedEventIds.length === 0) return;
+            state.pendingRegistrationIds = {};
 
             const mealSection = document.getElementById('dynamic-meal-section'); mealSection.innerHTML = '';
             state.selectedEventIds.forEach(eventId => {
@@ -2103,8 +2204,13 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     } else sessData.push({ date: s.date, time: s.time, meal: '不用餐', attend: false });
                 });
 
-                if (requiresSingleSessionChoice(ev) && selectedSessionCount !== 1) invalidSingleChoiceTitle = ev.title;
-                if (hasAttendThisEvent) payloads.push({ eventId, studentId: sid, name: sname, counselor, sessionsData: sessData });
+                if (hasAttendThisEvent && requiresSingleSessionChoice(ev) && selectedSessionCount !== 1) invalidSingleChoiceTitle = ev.title;
+                if (hasAttendThisEvent) {
+                    const requestKey = String(eventId);
+                    const registrationId = state.pendingRegistrationIds[requestKey] || createRequestId();
+                    state.pendingRegistrationIds[requestKey] = registrationId;
+                    payloads.push({ registrationId, eventId, studentId: sid, name: sname, counselor, sessionsData: sessData });
+                }
                 else droppedEvents.push(ev.title);
             });
 
@@ -2136,10 +2242,14 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 state.studentIdentity = { sid, name: sname, counselor };
                 showGlobalLoading(true, '安全驗證與資料處理中...');
 
-                // 先以三項身分資料查詢本人既有報名，讓前端能在真正寫入前立即提示衝堂；
-                // 後端仍會在 ScriptLock 內再次檢查，避免修改 API 請求或同時送出時繞過。
-                try {
-                    const queryResult = await apiRequest({ action: 'queryStudent', sid, sname, counselor }, 8000);
+                // 本人既有報名與最新公開名額同時查詢，最長只等一輪；後端仍在 ScriptLock 內做最終檢查。
+                const [queryCheck, publicCheck] = await Promise.allSettled([
+                    apiRequest({ action: 'queryStudent', sid, sname, counselor }, 8000),
+                    apiRequest({ action: 'getPublicData' }, 8000)
+                ]);
+
+                if (queryCheck.status === 'fulfilled') {
+                    const queryResult = queryCheck.value;
                     if (queryResult.success) {
                         state.myRegistrations = queryResult.data;
                         state.registeredEventIds = [...new Set(state.myRegistrations.map(registration => String(registration.eventId)))];
@@ -2160,13 +2270,13 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                             return showToast(`該時段您已報名「${conflict.title}」${when ? `（${when}）` : ''}，如仍要報名請聯絡個管老師取消原報名`, 'error');
                         }
                     }
-                } catch (error) {
+                } else {
                     // 首次報名或查詢暫時失敗時仍交由後端做最終身分、重複報名與衝堂檢查。
-                    showToast(`既有報名預檢未完成：${getRequestErrorMessage(error)}；送出時仍會由後端檢查`, 'info');
+                    showToast(`既有報名預檢未完成：${getRequestErrorMessage(queryCheck.reason)}；送出時仍會由後端檢查`, 'info');
                 }
 
-                try {
-                    const pubData = await apiRequest({ action: 'getPublicData' }, 8000);
+                if (publicCheck.status === 'fulfilled') {
+                    const pubData = publicCheck.value;
                     if (pubData.success) {
                         state.events = pubData.data.events;
                         state.eventStats = pubData.data.eventStats;
@@ -2175,8 +2285,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                         renderCounselorOptions();
                         updateEventCounts();
                     }
-                } catch(error) {
-                    showToast(`最新名額同步失敗：${getRequestErrorMessage(error)}；後端仍會做最終檢查`, 'info');
+                } else {
+                    showToast(`最新名額同步失敗：${getRequestErrorMessage(publicCheck.reason)}；後端仍會做最終檢查`, 'info');
                 }
 
                 let isCapacityExceeded = false;
@@ -2208,8 +2318,41 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     return showToast(`抱歉！「${exceededEventName}」${exceededSession ? `的 ${exceededSession} 場次` : ''}剛剛已被搶先額滿，請重新選擇。`, 'error');
                 }
 
+                const slowRegistrationNotice = startLongRequestNotice('Google 服務回應較慢，報名仍在處理中，請勿重複送出…');
                 try {
-                    const res = await apiRequest({ action: 'submitRegistration', data: payloads });
+                    let res;
+                    try {
+                        res = await apiRequest(
+                            { action: 'submitRegistration', data: payloads },
+                            REGISTRATION_SUBMIT_TIMEOUT_MS
+                        );
+                    } catch (submitError) {
+                        if (!submitError || submitError.code !== 'REQUEST_TIMEOUT') throw submitError;
+                        showGlobalLoading(true, 'Google 回應較慢，正在確認報名結果…');
+                        const registrationIds = payloads.map(payload => payload.registrationId);
+                        for (let attempt = 1; attempt <= 2 && !res; attempt++) {
+                            if (attempt > 1) await new Promise(resolve => setTimeout(resolve, 1200));
+                            try {
+                                const verification = await apiRequest(
+                                    { action: 'getRegistrationSaveStatus', registrationIds, sid, sname, counselor },
+                                    REGISTRATION_STATUS_TIMEOUT_MS
+                                );
+                                const savedIds = verification.success && verification.data
+                                    ? verification.data.savedRegistrationIds.map(id => String(id).toLowerCase())
+                                    : [];
+                                if (registrationIds.every(id => savedIds.includes(String(id).toLowerCase()))) {
+                                    res = { success: true, data: { confirmedAfterTimeout: true } };
+                                }
+                            } catch (verificationError) {
+                                // 下一輪仍以相同識別碼確認；不重新送出寫入請求。
+                            }
+                        }
+                        if (!res) {
+                            const unknownResultError = new Error('Google 尚未回覆最終結果，表單內容已保留。請稍候再按一次「確認送出」；系統會沿用相同報名編號，不會重複新增。');
+                            unknownResultError.code = 'REGISTRATION_RESULT_UNKNOWN';
+                            throw unknownResultError;
+                        }
+                    }
 
                     if (res.success) {
                         payloads.forEach(p => {
@@ -2220,33 +2363,45 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                         closeModal('modal-register');
                         showSuccessAndCalendar(allCheckedSessions);
                         state.selectedEventIds = [];
-
-                        if (droppedEvents.length > 0) {
-                            setTimeout(() => showToast(`已放棄未勾選的活動：${droppedEvents.join('、')}`, 'info'), 600);
-                        }
-                        await reloadDataSilently('同步資料中...');
+                        state.pendingRegistrationIds = {};
+                        void refreshPublicSnapshotInBackground();
                     } else {
                         showToast(res.error || '報名失敗，請確認資料是否正確', 'error');
                     }
                 } catch (err) {
-                    showToast(getRequestErrorMessage(err), 'error');
+                    showToast(getRequestErrorMessage(err), err && err.code === 'REGISTRATION_RESULT_UNKNOWN' ? 'info' : 'error');
                 } finally {
+                    clearTimeout(slowRegistrationNotice);
                     if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = '確認送出'; }
                     showGlobalLoading(false);
                 }
             };
 
-            if (seriesWarningMsg) {
-                if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = '確認送出'; }
-                customConfirm(seriesWarningMsg, () => {
-                    if (submitBtn) {
-                        submitBtn.disabled = true;
-                        submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i>處理中...';
-                    }
-                    proceedSubmit();
-                }, '⚠️ 系列活動報名提醒');
-            } else {
+            const startSubmission = () => {
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i>處理中...';
+                }
                 proceedSubmit();
+            };
+
+            const confirmSeriesThenSubmit = () => {
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = '確認送出'; }
+                if (seriesWarningMsg) customConfirm(seriesWarningMsg, startSubmission, '⚠️ 系列活動報名提醒');
+                else startSubmission();
+            };
+
+            if (droppedEvents.length > 0) {
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = '確認送出'; }
+                const droppedList = droppedEvents.map(title => `<li class="mt-1 font-bold text-gray-800">${escapeHTML(title)}</li>`).join('');
+                customConfirm(
+                    `<div class="text-left">以下活動尚未勾選任何場次：<ul class="mt-2 mb-3 list-disc pl-5">${droppedList}</ul>若繼續，這些活動將不會送出報名。</div>`,
+                    confirmSeriesThenSubmit,
+                    '確認放棄未勾選活動',
+                    { cancelText: '返回檢查', confirmText: '放棄未勾選活動並送出' }
+                );
+            } else {
+                confirmSeriesThenSubmit();
             }
         }
 
@@ -2986,6 +3141,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             releaseTempImagePreviews();
             state.tempImages = [];
             state.tempImagesChanged = false;
+            state.pendingEventCreateId = '';
             document.getElementById('edit-event-form').reset(); document.querySelectorAll('input[name="edit-loc-quick"]').forEach(cb => cb.checked = false);
             const teacherSelect = document.getElementById('edit-teacher'); teacherSelect.innerHTML = '<option value="">請選擇承辦人...</option>';
 
@@ -3252,29 +3408,65 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             };
 
             showGlobalLoading(true, '儲存活動中...');
+            const slowSaveNotice = startLongRequestNotice('Google 服務回應較慢，活動仍在儲存中，請勿關閉頁面…');
             try {
-                const res = await apiRequest({
+                const requestedEventId = id || state.pendingEventCreateId || createRequestId();
+                if (!id) state.pendingEventCreateId = requestedEventId;
+                const savePayload = {
                     action: id ? 'updateEvent' : 'addEvent',
                     data: eventData,
-                    eventId: id || null,
+                    eventId: requestedEventId,
                     adminName: state.currentUserName,
                     adminAcc: state.adminCreds.acc,
                     adminToken: state.adminCreds.token
-                });
+                };
+                let res;
+                try {
+                    res = await apiRequest(savePayload, MUTATION_TIMEOUT_MS);
+                } catch (saveError) {
+                    if (!saveError || saveError.code !== 'REQUEST_TIMEOUT') throw saveError;
+                    showGlobalLoading(true, '連線時間較長，正在確認活動是否已儲存…');
+                    if (!id) {
+                        try {
+                            const statusResponse = await apiRequest({
+                                action: 'getEventSaveStatus',
+                                eventId: requestedEventId,
+                                adminAcc: state.adminCreds.acc,
+                                adminToken: state.adminCreds.token
+                            }, STATUS_CHECK_TIMEOUT_MS);
+                            if (statusResponse.success && statusResponse.data.exists) {
+                                res = { success: true, data: { eventId: requestedEventId, alreadyExists: true } };
+                            }
+                        } catch (statusError) {
+                            // 狀態查詢失敗時仍可用相同 EventId 安全重送；後端會防止重複新增。
+                        }
+                    }
+                    if (!res) {
+                        showGlobalLoading(true, '尚未取得儲存結果，正在安全重送一次…');
+                        res = await apiRequest(savePayload, MUTATION_TIMEOUT_MS);
+                    }
+                }
                 if (checkTokenExpiration(res)) return;
                 if (res.success) {
                     const savedEventId = String(id || (res.data && res.data.eventId) || res.eventId || '');
                     if (!savedEventId) throw new Error('後端未回傳活動識別碼');
                     if (!id) document.getElementById('edit-id').value = savedEventId;
                     await persistTempEventImages(savedEventId);
+                    state.pendingEventCreateId = '';
                     resetDirty();
                     showToast(id ? '活動與圖片儲存成功！' : '活動已建立為未公開草稿！', 'success');
                     closeEditEventModal();
                     await reloadDataSilently('同步活動資料...');
                 }
                 else showToast('儲存失敗：' + res.error, 'error');
-            } catch (err) { showToast(getRequestErrorMessage(err), 'error'); }
+            } catch (err) {
+                const message = err && err.code === 'REQUEST_TIMEOUT'
+                    ? '目前仍無法確認是否完成儲存。填寫內容已保留，請先查看活動列表後再重試。'
+                    : getRequestErrorMessage(err, '網路連線異常');
+                showToast(message, 'error');
+            }
             finally {
+                clearTimeout(slowSaveNotice);
                 if (restoreBtnCallback) restoreBtnCallback();
                 showGlobalLoading(false);
             }

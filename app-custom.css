@@ -477,6 +477,7 @@
             border-color: var(--primary) !important;
             box-shadow: 0 4px 10px rgba(0, 87, 184, .22) !important;
         }
+        .student-steps-toggle { display: none; }
         #filter-btn-inter[aria-pressed="false"] { color: #006B4F !important; background: #E0FFF2 !important; border-color: #00A86B !important; }
         #filter-btn-academic[aria-pressed="false"] { color: #97123D !important; background: #FFE7EF !important; border-color: #E91E63 !important; }
         #filter-btn-career[aria-pressed="false"] { color: #6A4200 !important; background: #FFF4BF !important; border-color: #E09A00 !important; }
@@ -1502,7 +1503,26 @@
             .calendar-day-events { padding: .7rem; }
             .calendar-event-card { padding: .75rem; }
             #view-student > div:first-child { padding: 20px 18px; border-left-width: 5px; }
-            .student-steps { display: grid; grid-template-columns: 1fr; gap: 8px; }
+            .student-steps-toggle {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                width: 100%;
+                margin-top: 12px;
+                padding: 9px 12px;
+                color: var(--primary);
+                background: #f0f7ff;
+                border: 1px solid #bfdbfe;
+                border-radius: 9px;
+                font-size: .82rem;
+                font-weight: 800;
+            }
+            .student-steps-toggle span { display: inline-flex; align-items: center; gap: 7px; }
+            .student-steps-chevron { transition: transform .2s ease; }
+            .student-steps-toggle[aria-expanded="true"] .student-steps-chevron { transform: rotate(180deg); }
+            .student-steps { display: none; grid-template-columns: 1fr; gap: 7px; margin-top: 9px; padding: 0 10px 3px; text-align: left; font-size: .76rem; }
+            .student-steps.is-expanded { display: grid; }
+            .student-steps b { width: 21px; height: 21px; font-size: .68rem; }
             .student-list-toolbar { align-items: stretch; flex-direction: column; }
             .student-display-switch { align-self: flex-end; }
             #category-filters { width: 100%; overflow-x: auto; flex-wrap: nowrap !important; justify-content: flex-start !important; padding-bottom: 8px; }
