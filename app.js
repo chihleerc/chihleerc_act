@@ -7,8 +7,11 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             events: [], eventStats: {}, counselors: [], registrations: [], admins: [], logs: [], adminCreds: null, adminAddTempStudent: null, myRegistrations: [],
             lineUsage: { month: '', used: 0, limit: 200, remaining: 200 }, dataQualityReport: null, archivePreview: null,
             studentIdentity: null, registeredEventIds: [], pendingRegistrationIds: {},
-            eventCounts: new Map(), calendarYear: null, calendarMonth: null, calendarSelectedDate: ''
+            eventCounts: new Map(), calendarYear: null, calendarMonth: null, calendarSelectedDate: '',
+            adminDataLoaded: false, adminActiveTab: 'quick'
         };
+        let adminDataRequestPromise = null;
+        let adminBootstrapRequestPromise = null;
 
         let isFormDirty = false;
         const modalFocusHistory = new Map();
@@ -157,7 +160,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 'open-register': () => openRegisterModal(),
                 'switch-admin-tab': () => switchAdminTab(target.dataset.tab),
                 'reload-data': () => reloadDataSilently('手動更新資料...'),
-                'open-edit-event': () => openEditEventModal(eventId || undefined),
+                'open-edit-event': () => openEditEventModalWithBootstrap(eventId || undefined),
                 'choose-event-images': () => document.getElementById('edit-images-input').click(),
                 'close-modal': () => closeModal(target.dataset.modal),
                 'close-query': () => closeQueryModalSafe(),
@@ -411,9 +414,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         // 固定記錄這一版完成修改的時間，不會因登入、重新整理或查詢資料而改變。
-        const VERSION_LABEL = 'V11.21.8';
-        const VERSION_UPDATED_AT = '2026/09/15 14:37';
-        const VERSION_UPDATED_AT_ISO = '2026-09-15T14:37:00+08:00';
+        const VERSION_LABEL = 'V11.21.9';
+        const VERSION_UPDATED_AT = '2026/09/15 20:34';
+        const VERSION_UPDATED_AT_ISO = '2026-09-15T20:34:00+08:00';
         const API_TIMEOUT_MS = 20000;
         const LOGIN_TIMEOUT_MS = 45000;
         const ADMIN_DATA_TIMEOUT_MS = 60000;
@@ -481,6 +484,10 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             const data = response.data;
             if (action === 'getPublicData' && !isPlainObject(data)) throw new Error('公開資料格式不正確');
             if (action === 'getAdminData' && (!isPlainObject(data) || !isPlainObject(data.fullData))) throw new Error('後台資料格式不正確');
+            if (action === 'getAdminBootstrap' && (
+                !isPlainObject(data) || !Array.isArray(data.admins) ||
+                data.admins.some(admin => !isPlainObject(admin) || typeof admin.name !== 'string')
+            )) throw new Error('後台基本資料格式不正確');
             if ((action === 'login' || action === 'loginFast') && (
                 !isPlainObject(data) || typeof data.token !== 'string' || !data.token ||
                 typeof data.name !== 'string' || !['admin', 'staff'].includes(data.role) ||
@@ -1515,8 +1522,10 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 updateBulkActionBar();
                 scheduleDescriptionClamp();
             } else if (viewName === 'teacherLogin' || viewName === 'teacherDashboard') {
-                if (state.isTeacherLoggedIn) { document.getElementById('view-teacher-dashboard').classList.remove('hidden'); switchAdminTab('list'); renderTeacherDashboard(); }
-                else document.getElementById('view-teacher-login').classList.remove('hidden');
+                if (state.isTeacherLoggedIn) {
+                    document.getElementById('view-teacher-dashboard').classList.remove('hidden');
+                    switchAdminTab(state.adminActiveTab || 'quick');
+                } else document.getElementById('view-teacher-login').classList.remove('hidden');
                 document.getElementById('nav-teacher-btn').className = "px-2 md:px-3 py-1.5 md:py-2 rounded-md text-xs md:text-sm font-medium bg-chihlee-red text-white shadow transition whitespace-nowrap shrink-0";
                 document.getElementById('nav-teacher-btn').setAttribute('aria-current', 'page');
             }
@@ -1578,42 +1587,24 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     document.getElementById('teacher-category-filter').value = 'all';
                     document.getElementById('teacher-name-filter').innerHTML = '';
 
+                    state.adminDataLoaded = false;
+                    state.adminActiveTab = 'quick';
+                    // 保留登入前已載入的公開活動，避免老師切回學生頁時出現空白；
+                    // 完整管理活動會在進入活動列表／動態紀錄時才覆蓋。
+                    state.registrations = [];
+                    state.logs = [];
+                    state.admins = [];
+                    state.lineUsage = { month: '', used: 0, limit: 200, remaining: 200 };
+                    adminDataRequestPromise = null;
+                    adminBootstrapRequestPromise = null;
+
                     clearTimeout(slowLoginNotice);
                     showGlobalLoading(false);
                     updateVersionTime();
                     switchView('teacherDashboard');
-                    showSkeletonLoading(true);
-                    showToast(`${user.name} 登入成功，正在載入後台資料`, 'success');
-
-                    const adminPayload = {
-                        action: 'getAdminData',
-                        adminAcc: state.adminCreds.acc,
-                        adminToken: state.adminCreds.token
-                    };
-                    try {
-                        const adminResult = await requestWithOneTimeoutRetry(
-                            adminPayload,
-                            ADMIN_DATA_TIMEOUT_MS,
-                            '後台資料較多，正在重新載入…'
-                        );
-                        if (checkTokenExpiration(adminResult)) return;
-                        if (!adminResult.success) throw new Error(adminResult.error || '後台資料載入失敗');
-                        const fullData = adminResult.data.fullData;
-                        state.events = fullData.events;
-                        state.registrations = normalizeRegistrations(fullData.registrations);
-                        state.logs = fullData.logs;
-                        state.admins = fullData.admins;
-                        state.lineUsage = fullData.lineUsage;
-                        updateEventCounts();
-                        renderTeacherDashboard();
-                        showToast('後台資料載入完成', 'success');
-                        void refreshPublicSnapshotInBackground();
-                    } catch (loadError) {
-                        showToast(`已登入，但後台資料尚未載入：${getRequestErrorMessage(loadError)}。請點「重整」再試一次。`, 'error');
-                    } finally {
-                        showSkeletonLoading(false);
-                        showGlobalLoading(false);
-                    }
+                    showToast(`${user.name} 登入成功，可直接快速新增活動`, 'success');
+                    // 只在背景預載很小的承辦人名單；不阻塞畫面，也不讀取活動、報名與紀錄。
+                    void ensureAdminBootstrapLoaded({ silent: true });
                 } else {
                     if (errorMsgEl) { errorMsgEl.innerText = res.error || '帳號或密碼錯誤，請重新確認'; errorMsgEl.classList.remove('hidden'); }
                     showToast(res.error || '帳號或密碼錯誤', 'error');
@@ -1645,6 +1636,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             }
             state.adminCreds = null; state.isTeacherLoggedIn = false; state.currentUserRole = null; state.currentUserName = null;
             state.events = []; state.eventStats = {}; state.counselors = []; state.registrations = []; state.logs = []; state.admins = [];
+            state.adminDataLoaded = false; state.adminActiveTab = 'quick';
+            adminDataRequestPromise = null; adminBootstrapRequestPromise = null;
             showToast('已安全登出', 'info'); switchView('student');
             await fetchInitialData(); renderStudentEvents();
         }
@@ -2578,22 +2571,123 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             openModal('modal-success');
         }
 
-        function switchAdminTab(tab) {
-            document.getElementById('adminActivitySection').classList.toggle('hidden', tab !== 'list');
-            document.getElementById('adminLogSection').classList.toggle('hidden', tab !== 'log');
-            document.getElementById('adminDataQualitySection').classList.toggle('hidden', tab !== 'quality');
+        async function ensureAdminBootstrapLoaded(options = {}) {
+            if (!state.isTeacherLoggedIn || !state.adminCreds) return false;
+            if (Array.isArray(state.admins) && state.admins.length > 0) return true;
+            if (adminBootstrapRequestPromise) return adminBootstrapRequestPromise;
+
+            const silent = options.silent === true;
+            adminBootstrapRequestPromise = (async () => {
+                if (!silent) showGlobalLoading(true, '載入新增活動基本資料...');
+                try {
+                    const response = await apiRequest({
+                        action: 'getAdminBootstrap',
+                        adminAcc: state.adminCreds.acc,
+                        adminToken: state.adminCreds.token
+                    }, 20000);
+                    if (checkTokenExpiration(response)) return false;
+                    if (!response.success) throw new Error(response.error || '新增活動基本資料載入失敗');
+                    state.admins = Array.isArray(response.data.admins) ? response.data.admins : [];
+                    return state.admins.length > 0;
+                } catch (error) {
+                    if (!silent) showToast(getRequestErrorMessage(error, '新增活動基本資料載入失敗'), 'error');
+                    return false;
+                } finally {
+                    if (!silent) showGlobalLoading(false);
+                    adminBootstrapRequestPromise = null;
+                }
+            })();
+            return adminBootstrapRequestPromise;
+        }
+
+        async function ensureAdminDataLoaded(options = {}) {
+            if (!state.isTeacherLoggedIn || !state.adminCreds) return false;
+            if (state.adminDataLoaded && options.force !== true) return true;
+            if (adminDataRequestPromise) return adminDataRequestPromise;
+
+            const skeleton = document.getElementById('skeleton-admin');
+            if (skeleton) skeleton.classList.remove('hidden');
+            adminDataRequestPromise = (async () => {
+                try {
+                    const adminResult = await requestWithOneTimeoutRetry({
+                        action: 'getAdminData',
+                        adminAcc: state.adminCreds.acc,
+                        adminToken: state.adminCreds.token
+                    }, ADMIN_DATA_TIMEOUT_MS, '後台資料較多，正在重新載入…');
+                    if (checkTokenExpiration(adminResult)) return false;
+                    if (!adminResult.success) throw new Error(adminResult.error || '後台資料載入失敗');
+                    const fullData = adminResult.data.fullData;
+                    state.events = fullData.events;
+                    state.registrations = normalizeRegistrations(fullData.registrations);
+                    state.logs = fullData.logs;
+                    state.admins = fullData.admins;
+                    state.lineUsage = fullData.lineUsage;
+                    state.adminDataLoaded = true;
+                    updateEventCounts();
+                    return true;
+                } catch (loadError) {
+                    state.adminDataLoaded = false;
+                    showToast(`後台資料載入失敗：${getRequestErrorMessage(loadError)}。請稍後再試。`, 'error');
+                    return false;
+                } finally {
+                    if (skeleton) skeleton.classList.add('hidden');
+                    adminDataRequestPromise = null;
+                }
+            })();
+            return adminDataRequestPromise;
+        }
+
+        async function openEditEventModalWithBootstrap(eventId = null) {
+            if (!state.isTeacherLoggedIn) return showToast('請先登入', 'error');
+            if (eventId && !state.adminDataLoaded) {
+                const loaded = await ensureAdminDataLoaded();
+                if (!loaded) return;
+            }
+            if (!Array.isArray(state.admins) || state.admins.length === 0) {
+                const loaded = await ensureAdminBootstrapLoaded();
+                if (!loaded) return;
+            }
+            openEditEventModal(eventId);
+        }
+
+        async function switchAdminTab(tab) {
+            const normalizedTab = ['quick', 'list', 'log', 'quality'].includes(tab) ? tab : 'quick';
+            state.adminActiveTab = normalizedTab;
+            const quickSection = document.getElementById('adminQuickCreateSection');
+            if (quickSection) quickSection.classList.toggle('hidden', normalizedTab !== 'quick');
+            document.getElementById('adminActivitySection').classList.toggle('hidden', normalizedTab !== 'list');
+            document.getElementById('adminLogSection').classList.toggle('hidden', normalizedTab !== 'log');
+            document.getElementById('adminDataQualitySection').classList.toggle('hidden', normalizedTab !== 'quality');
 
             const activeTabClass = 'font-bold text-gray-800 border-b-2 border-chihlee-blue pb-1 px-2 transition whitespace-nowrap text-sm md:text-base';
             const defaultTabClass = 'text-gray-500 hover:text-gray-800 pb-1 px-2 transition whitespace-nowrap text-sm md:text-base';
+            const quickTab = document.getElementById('tabQuickCreate');
+            if (quickTab) quickTab.className = normalizedTab === 'quick' ? activeTabClass : defaultTabClass;
+            document.getElementById('tabActivityList').className = normalizedTab === 'list' ? activeTabClass : defaultTabClass;
+            document.getElementById('tabActivityLog').className = normalizedTab === 'log' ? activeTabClass : defaultTabClass;
+            document.getElementById('tabDataQuality').className = normalizedTab === 'quality' ? activeTabClass : defaultTabClass;
 
-            document.getElementById('tabActivityList').className = tab === 'list' ? activeTabClass : defaultTabClass;
-            document.getElementById('tabActivityLog').className = tab === 'log' ? activeTabClass : defaultTabClass;
-            document.getElementById('tabDataQuality').className = tab === 'quality' ? activeTabClass : defaultTabClass;
-            if (tab === 'log') renderLogs();
-            if (tab === 'quality') {
+            const skeleton = document.getElementById('skeleton-admin');
+            if (normalizedTab === 'quick') {
+                if (skeleton) skeleton.classList.add('hidden');
+                void ensureAdminBootstrapLoaded({ silent: true });
+                return;
+            }
+            if (normalizedTab === 'quality') {
+                if (skeleton) skeleton.classList.add('hidden');
                 initializeArchivePanel();
                 if (state.dataQualityReport) renderDataQualityReport(state.dataQualityReport);
+                return;
             }
+
+            const targetSection = document.getElementById(normalizedTab === 'list' ? 'adminActivitySection' : 'adminLogSection');
+            const needsLoad = !state.adminDataLoaded;
+            if (needsLoad && targetSection) targetSection.classList.add('hidden');
+            const loaded = await ensureAdminDataLoaded();
+            if (!loaded || state.adminActiveTab !== normalizedTab) return;
+            if (targetSection) targetSection.classList.remove('hidden');
+            if (normalizedTab === 'list') renderTeacherDashboard();
+            if (normalizedTab === 'log') renderLogs();
         }
 
         function renderLineUsageSummary() {
@@ -3391,6 +3485,36 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             if (failures.length) throw new Error(`${failures.join('；')}。活動文字已儲存，可保留視窗後重新選擇圖片。`);
         }
 
+        function upsertSavedEventInAdminState(eventId, eventData) {
+            if (!state.adminDataLoaded) return;
+            const existingIndex = state.events.findIndex(event => String(event.id) === String(eventId));
+            const previous = existingIndex >= 0 ? state.events[existingIndex] : null;
+            const savedImages = state.tempImages
+                .filter(image => !image.isNew && image.url && image.publicId)
+                .map(image => ({ url: String(image.url), publicId: String(image.publicId) }));
+            const nextEvent = {
+                id: String(eventId),
+                title: eventData.title,
+                category: eventData.category,
+                description: eventData.description,
+                location: eventData.location,
+                capacity: eventData.capacity,
+                sessions: JSON.parse(JSON.stringify(eventData.sessions || [])),
+                teacher: eventData.teacher,
+                hasMeal: eventData.hasMeal === true,
+                hasSnack: eventData.hasSnack === true,
+                isOneOnOne: eventData.isOneOnOne === true,
+                isSeries: eventData.isSeries === true,
+                isPublished: previous ? previous.isPublished === true : false,
+                tags: [...(eventData.tags || [])],
+                images: savedImages
+            };
+            if (existingIndex >= 0) state.events.splice(existingIndex, 1, nextEvent);
+            else state.events.unshift(nextEvent);
+            updateEventCounts();
+            if (state.adminActiveTab === 'list') renderTeacherDashboard();
+        }
+
         async function proceedSubmitEventEdit(id, mainLocationString, finalSessions, isOoo, isSeriesEvent, finalCapacity, restoreBtnCallback) {
             const eventData = {
                 title: document.getElementById('edit-title').value.trim(),
@@ -3452,11 +3576,11 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     if (!savedEventId) throw new Error('後端未回傳活動識別碼');
                     if (!id) document.getElementById('edit-id').value = savedEventId;
                     await persistTempEventImages(savedEventId);
+                    upsertSavedEventInAdminState(savedEventId, eventData);
                     state.pendingEventCreateId = '';
                     resetDirty();
                     showToast(id ? '活動與圖片儲存成功！' : '活動已建立為未公開草稿！', 'success');
                     closeEditEventModal();
-                    await reloadDataSilently('同步活動資料...');
                 }
                 else showToast('儲存失敗：' + res.error, 'error');
             } catch (err) {

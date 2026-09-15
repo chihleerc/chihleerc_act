@@ -1,5 +1,5 @@
-致理．心夥伴－活動報名系統 V11.21.8 正式整合版
-更新時間：2026/09/15 14:37（台灣時間）
+致理．心夥伴－活動報名系統 V11.21.9 正式整合版
+更新時間：2026/09/15 20:34（台灣時間）
 
 一、檔案內容
 1. Code.gs：Google Apps Script 後端完整檔案
@@ -11,7 +11,7 @@
 1. 先將 Code.gs 全部取代 GAS 專案現有的 Code.gs，儲存後部署「新版本」。
 2. 確認 GAS 網頁應用程式網址仍與 app.js 最上方 GAS_API_URL 一致。
 3. 再將 index.html、app.js、app-custom.css 上傳 GitHub，覆蓋同名檔案。
-4. GitHub Pages 完成部署後，以無痕視窗開啟，確認導覽列顯示 V11.21.8。
+4. GitHub Pages 完成部署後，以無痕視窗開啟，確認導覽列顯示 V11.21.9。
 
 重要：本版務必先部署 Code.gs，再更新 GitHub 前端。後端保留舊版 login 相容端點，
 因此先更新後端不會影響目前正式前端；反向更新可能尚未具備防重複存檔能力。
@@ -61,4 +61,7 @@
 7. 報名成功與查詢紀錄的「加入行事曆」應顯示正確台北日期時間。
 
 五、測試檔
-verify_v11210.js、verify_capacity_models.js、verify_v11217.js、verify_v11218.js 僅供本機檢查，不需上傳 GitHub 或 GAS。
+verify_v11210.js、verify_capacity_models.js、verify_v11217.js、verify_v11218.js、verify_v11219.js 僅供本機檢查，不需上傳 GitHub 或 GAS。
+
+
+V11.21.9 重點：老師登入後預設進入「快速新增」，不再自動載入完整後台；手機版新增活動 UI 維持既有 modal；完整活動／報名／紀錄只在進入管理頁籤時載入；活動新增或編輯成功後以本地狀態更新，避免整包重新下載。
