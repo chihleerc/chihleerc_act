@@ -35,6 +35,41 @@
 .admin-publication-toggle:active { transform: translateY(1px); }
 .admin-publication-toggle:focus-visible { outline: 3px solid #FACC15; outline-offset: 2px; }
 
+/* 個管老師手動新增報名：使用明確高對比色，避免全域標題樣式覆蓋。 */
+#modal-admin-add-participant .admin-add-modal-panel {
+    overflow-x: hidden;
+    overflow-y: auto;
+    color: #102A43;
+    background: #FFFFFF !important;
+}
+#modal-admin-add-participant .admin-add-modal-title {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    width: 100%;
+    margin: 0;
+    padding: .9rem 1.15rem;
+    color: #FFFFFF !important;
+    background: #0057B8 !important;
+    border-bottom: 4px solid #F4B400;
+    font-size: 1.08rem;
+    font-weight: 800;
+    line-height: 1.4;
+}
+#modal-admin-add-participant .admin-add-modal-title i { color: #FFFFFF !important; }
+#modal-admin-add-participant .admin-add-modal-body { padding: 1.15rem; }
+#modal-admin-add-participant label { color: #243B53 !important; }
+#modal-admin-add-participant #admin-add-student-info { color: #243B53 !important; }
+#modal-admin-add-participant #btn-verify-admin-student {
+    color: #FFFFFF !important;
+    background: #0057B8 !important;
+    border: 1px solid #0057B8 !important;
+    font-weight: 800;
+}
+#modal-admin-add-participant #btn-verify-admin-student:hover { background: #003E87 !important; }
+#modal-admin-add-participant #btn-verify-admin-student:disabled { color: #52677A !important; background: #E5E7EB !important; border-color: #D1D5DB !important; }
+#modal-admin-add-participant #btn-admin-submit-add:not(:disabled) { color: #FFFFFF !important; background: #0057B8 !important; }
+
         /* 2026 UI refresh: category-aware, sharp and accessible */
         :root {
             --ink: #102A43;

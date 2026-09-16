@@ -3,7 +3,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         let state = {
             isTeacherLoggedIn: false, currentUserRole: null, currentUserName: null, currentFilter: '全部', studentDisplayMode: 'list',
             selectedEventIds: [], currentAdminEventId: null, currentRemarkStudent: null,
-            tempTags: [], tempSessions: [], tempImages: [], tempImagesChanged: false, pendingEventCreateId: '', adminCurrentPage: 1, editingRegId: null,
+            tempTags: [], tempSessions: [], tempImages: [], tempImagesChanged: false, pendingEventCreateId: '', pendingAdminRegistrationId: '', adminCurrentPage: 1, editingRegId: null,
             events: [], eventStats: {}, counselors: [], registrations: [], admins: [], logs: [], adminCreds: null, adminAddTempStudent: null, myRegistrations: [],
             lineUsage: { month: '', used: 0, limit: 200, remaining: 200 }, dataQualityReport: null, archivePreview: null,
             studentIdentity: null, registeredEventIds: [], pendingRegistrationIds: {},
@@ -465,9 +465,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         // 固定記錄這一版完成修改的時間，不會因登入、重新整理或查詢資料而改變。
-        const VERSION_LABEL = 'V11.21.11';
-        const VERSION_UPDATED_AT = '2026/09/16 01:22';
-        const VERSION_UPDATED_AT_ISO = '2026-09-16T01:22:00+08:00';
+        const VERSION_LABEL = 'V11.21.13';
+        const VERSION_UPDATED_AT = '2026/09/16 19:20';
+        const VERSION_UPDATED_AT_ISO = '2026-09-16T19:20:00+08:00';
         const API_TIMEOUT_MS = 20000;
         const LOGIN_TIMEOUT_MS = 25000;
         const ADMIN_DATA_TIMEOUT_MS = 45000;
@@ -539,6 +539,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 !isPlainObject(data.pagination) || data.pagination.pageSize !== 5 || !isPlainObject(data.filterOptions)
             )) throw new Error('後台活動分頁格式不正確');
             if (action === 'getAdminEventParticipants' && (!isPlainObject(data) || !Array.isArray(data.registrations))) throw new Error('活動報名名單格式不正確');
+            if (action === 'getAdminRegistrationSaveStatus' && (!isPlainObject(data) || typeof data.saved !== 'boolean')) throw new Error('新增報名確認結果格式不正確');
             if ((action === 'login' || action === 'loginFast') && (
                 !isPlainObject(data) || typeof data.token !== 'string' || !data.token ||
                 typeof data.name !== 'string' || !['admin', 'staff'].includes(data.role) ||
@@ -1790,13 +1791,14 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             }
         }
 
-        async function loadAdminDashboard(page = 1, force = false) {
+        async function loadAdminDashboard(page = 1, force = false, options = {}) {
             if (!state.adminCreds) return;
+            const silent = options && options.silent === true;
             const requestSequence = ++adminDataRequestSequence;
             document.getElementById('admin-entry-panel').classList.add('hidden');
-            if (!state.adminDataLoaded) showSkeletonLoading(true);
-            showGlobalLoading(true, '正在載入活動清單（每次 5 項）…');
-            const slowNotice = startLongRequestNotice('Google 仍在讀取活動資料；不會重複送出請求…', 9000);
+            if (!silent && !state.adminDataLoaded) showSkeletonLoading(true);
+            if (!silent) showGlobalLoading(true, '正在載入活動清單（每次 5 項）…');
+            const slowNotice = silent ? null : startLongRequestNotice('Google 仍在讀取活動資料；不會重複送出請求…', 9000);
             try {
                 const scopeSelect = document.getElementById('teacher-scope-filter');
                 const yearSelect = document.getElementById('teacher-year-filter');
@@ -1833,7 +1835,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 document.getElementById('admin-tabs-bar').classList.remove('hidden');
                 switchAdminTab('list');
                 renderTeacherDashboard();
-                if (!force) {
+                if (!force && !silent) {
                     const scopeLabels = { upcoming: '即將到來的活動', expired: '已過期活動', all: '全部活動' };
                     showToast(`${scopeLabels[res.data.pagination.scope] || '活動'}已載入`, 'success');
                 }
@@ -1841,11 +1843,11 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             } catch (error) {
                 if (requestSequence !== adminDataRequestSequence) return false;
                 if (!state.adminDataLoaded) document.getElementById('admin-entry-panel').classList.remove('hidden');
-                showToast(`後台資料尚未載入：${getRequestErrorMessage(error)}。可先使用「快速新增活動」。`, 'error');
+                if (!silent) showToast(`後台資料尚未載入：${getRequestErrorMessage(error)}。可先使用「快速新增活動」。`, 'error');
                 return false;
             } finally {
-                clearTimeout(slowNotice);
-                if (requestSequence === adminDataRequestSequence) {
+                if (slowNotice) clearTimeout(slowNotice);
+                if (!silent && requestSequence === adminDataRequestSequence) {
                     showSkeletonLoading(false);
                     showGlobalLoading(false);
                 }
@@ -3834,7 +3836,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
 
             const infoBox = document.getElementById('admin-add-student-info');
             infoBox.innerHTML = '';
-            infoBox.classList.remove('bg-blue-50', 'bg-red-50', 'border-blue-100', 'border-red-100');
+            infoBox.classList.remove('bg-blue-50', 'bg-red-50', 'bg-amber-50', 'border-blue-100', 'border-red-100', 'border-amber-200');
             infoBox.classList.add('hidden');
 
             document.getElementById('admin-add-meals-container').classList.add('hidden');
@@ -3843,8 +3845,10 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             const submitBtn = document.getElementById('btn-admin-submit-add');
             submitBtn.disabled = true;
             submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            submitBtn.innerHTML = '確認新增';
 
             state.adminAddTempStudent = null;
+            state.pendingAdminRegistrationId = createRequestId();
             openModal('modal-admin-add-participant');
         }
 
@@ -3855,31 +3859,51 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             const infoBox = document.getElementById('admin-add-student-info');
             const verifyButton = document.getElementById('btn-verify-admin-student');
             let student = null;
+            let lookupFailureMessage = '';
 
             verifyButton.disabled = true;
             verifyButton.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i>驗證中';
+            const slowNotice = setTimeout(() => {
+                if (verifyButton.disabled) verifyButton.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i>Google 回應較慢，仍在查詢';
+            }, 5000);
             try {
                 const result = await apiRequest({
                     action: 'lookupStudentForAdminRegistration',
                     sid,
                     adminAcc: state.adminCreds.acc,
                     adminToken: state.adminCreds.token
-                });
+                }, 15000);
                 if (checkTokenExpiration(result)) return;
                 if (result.success) student = result.data;
-                else if (result.code !== 'STUDENT_NOT_FOUND') showToast('驗證失敗：' + result.error, 'error');
+                else if (result.code !== 'STUDENT_NOT_FOUND') {
+                    lookupFailureMessage = result.error || '學生資料驗證未完成';
+                    showToast('驗證失敗：' + lookupFailureMessage, 'error');
+                }
             } catch (error) {
-                showToast(`學生資料驗證失敗：${getRequestErrorMessage(error)}`, 'error');
+                lookupFailureMessage = getRequestErrorMessage(error, '學生資料驗證未完成');
+                showToast(`學生資料驗證失敗：${lookupFailureMessage}`, 'error');
             } finally {
+                clearTimeout(slowNotice);
                 verifyButton.disabled = false;
                 verifyButton.innerText = '驗證';
+            }
+
+            if (lookupFailureMessage) {
+                state.adminAddTempStudent = null;
+                infoBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-600 mr-1"></i> 驗證未完成：${escapeHTML(lookupFailureMessage)}。請稍後再按一次「驗證」。`;
+                infoBox.classList.remove('hidden', 'bg-blue-50', 'border-blue-100', 'bg-red-50', 'border-red-100');
+                infoBox.classList.add('bg-amber-50', 'border-amber-200');
+                document.getElementById('admin-add-meals-container').classList.add('hidden');
+                document.getElementById('btn-admin-submit-add').disabled = true;
+                document.getElementById('btn-admin-submit-add').classList.add('opacity-50', 'cursor-not-allowed');
+                return;
             }
 
             if (student) {
                 const isAlreadyRegistered = state.registrations.some(r => String(r.eventId) === String(state.currentAdminEventId) && String(r.studentId) === sid);
                 if (isAlreadyRegistered) {
                     infoBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-red-500 mr-1"></i> <span class="font-bold text-red-600">${escapeHTML(student.name)}</span> 已經在報名名單中了！`;
-                    infoBox.classList.remove('hidden', 'bg-blue-50', 'border-blue-100'); infoBox.classList.add('bg-red-50', 'border-red-100');
+                    infoBox.classList.remove('hidden', 'bg-blue-50', 'bg-amber-50', 'border-blue-100', 'border-amber-200'); infoBox.classList.add('bg-red-50', 'border-red-100');
                     document.getElementById('admin-add-meals-container').classList.add('hidden');
                     document.getElementById('btn-admin-submit-add').disabled = true; document.getElementById('btn-admin-submit-add').classList.add('opacity-50', 'cursor-not-allowed');
                     return;
@@ -3887,7 +3911,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
 
                 state.adminAddTempStudent = student;
                 infoBox.innerHTML = `<i class="fa-solid fa-check-circle text-green-500 mr-1"></i> 找到學生：<span class="font-bold text-gray-800">${escapeHTML(student.name)}</span> (${escapeHTML(student.eduSystem || '')}${escapeHTML(student.className || '')})`;
-                infoBox.classList.remove('hidden', 'bg-red-50', 'border-red-100'); infoBox.classList.add('bg-blue-50', 'border-blue-100');
+                infoBox.classList.remove('hidden', 'bg-red-50', 'bg-amber-50', 'border-red-100', 'border-amber-200'); infoBox.classList.add('bg-blue-50', 'border-blue-100');
 
                 const ev = state.events.find(e => String(e.id) === state.currentAdminEventId); const opts = getMealOptionsHtml(ev);
 
@@ -3954,7 +3978,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             } else {
                 state.adminAddTempStudent = null;
                 infoBox.innerHTML = `<i class="fa-solid fa-circle-xmark text-red-500 mr-1"></i> 查無此學號，請先在 Google 試算表 Students 分頁建檔。`;
-                infoBox.classList.remove('hidden', 'bg-blue-50', 'border-blue-100'); infoBox.classList.add('bg-red-50', 'border-red-100');
+                infoBox.classList.remove('hidden', 'bg-blue-50', 'bg-amber-50', 'border-blue-100', 'border-amber-200'); infoBox.classList.add('bg-red-50', 'border-red-100');
                 document.getElementById('admin-add-meals-container').classList.add('hidden');
                 document.getElementById('btn-admin-submit-add').disabled = true; document.getElementById('btn-admin-submit-add').classList.add('opacity-50', 'cursor-not-allowed');
             }
@@ -3988,8 +4012,17 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         async function proceedAdminAddParticipant(eventId, student, sessData) {
-            const payload = [{ eventId: eventId, studentId: student.id, name: student.name, sessionsData: sessData }];
+            const registrationId = state.pendingAdminRegistrationId || createRequestId();
+            state.pendingAdminRegistrationId = registrationId;
+            const payload = [{ registrationId, eventId: eventId, studentId: student.id, name: student.name, sessionsData: sessData }];
+            const submitButton = document.getElementById('btn-admin-submit-add');
+            const shouldRefreshParticipants = !document.getElementById('modal-participants').classList.contains('hidden');
+            submitButton.disabled = true;
+            submitButton.classList.add('opacity-50', 'cursor-not-allowed');
+            submitButton.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i>新增中';
             showGlobalLoading(true, '新增報名資料中...');
+            const slowNotice = startLongRequestNotice('Google 寫入速度較慢，仍在處理；請勿重複送出…', 7000);
+            let completed = false;
             try {
                 const res = await apiRequest({
                     action: 'adminSubmitRegistration',
@@ -3997,19 +4030,76 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     adminName: state.currentUserName,
                     adminAcc: state.adminCreds.acc,
                     adminToken: state.adminCreds.token
-                });
+                }, REGISTRATION_SUBMIT_TIMEOUT_MS);
                 if (checkTokenExpiration(res)) return;
                 if (res.success) {
-                    closeModal('modal-admin-add-participant');
-                    await loadAdminDashboard(state.adminCurrentPage, true);
-                    if (!document.getElementById('modal-participants').classList.contains('hidden')) {
-                        await loadEventParticipants(state.currentAdminEventId, 'participants');
-                    }
-                    showToast('新增成功！', 'success');
+                    completed = true;
+                    finishAdminAddSuccess(eventId, shouldRefreshParticipants);
                 }
                 else showToast('新增失敗：' + res.error, 'error');
-            } catch (err) { showToast(getRequestErrorMessage(err), 'error'); }
-            finally { showGlobalLoading(false); }
+            } catch (err) {
+                if (err && err.code === 'REQUEST_TIMEOUT') {
+                    showGlobalLoading(true, '回應較慢，正在確認報名是否已寫入…');
+                    const saved = await confirmAdminRegistrationSaved(registrationId);
+                    if (saved) {
+                        completed = true;
+                        finishAdminAddSuccess(eventId, shouldRefreshParticipants);
+                    } else {
+                        submitButton.innerHTML = '<i class="fa-solid fa-clock mr-1"></i>結果待確認';
+                        showToast('Google 尚未回覆寫入結果。請先不要重複送出，稍後關閉視窗並重整報名名單確認。', 'info');
+                    }
+                } else showToast(getRequestErrorMessage(err), 'error');
+            } finally {
+                clearTimeout(slowNotice);
+                showGlobalLoading(false);
+                if (!completed && submitButton.innerText !== '結果待確認') {
+                    submitButton.disabled = false;
+                    submitButton.classList.remove('opacity-50', 'cursor-not-allowed');
+                    submitButton.innerHTML = '確認新增';
+                }
+            }
+        }
+
+        async function confirmAdminRegistrationSaved(registrationId) {
+            for (let attempt = 0; attempt < 2; attempt++) {
+                if (attempt > 0) await waitForRetry(1500);
+                try {
+                    const response = await apiRequest({
+                        action: 'getAdminRegistrationSaveStatus',
+                        registrationId,
+                        adminAcc: state.adminCreds.acc,
+                        adminToken: state.adminCreds.token
+                    }, STATUS_CHECK_TIMEOUT_MS);
+                    if (checkTokenExpiration(response)) return false;
+                    if (response.success && response.data.saved) return true;
+                } catch (error) {
+                    if (attempt === 1) return false;
+                }
+            }
+            return false;
+        }
+
+        function finishAdminAddSuccess(eventId, shouldRefreshParticipants) {
+            closeModal('modal-admin-add-participant');
+            state.pendingAdminRegistrationId = '';
+            showGlobalLoading(false);
+            showToast('新增成功，正在背景同步最新名單', 'success');
+            void refreshAfterAdminAdd(eventId, shouldRefreshParticipants);
+        }
+
+        async function refreshAfterAdminAdd(eventId, shouldRefreshParticipants) {
+            const dashboardUpdated = await loadAdminDashboard(state.adminCurrentPage, true, { silent: true });
+            let participantsUpdated = true;
+            if (
+                shouldRefreshParticipants &&
+                String(state.currentAdminEventId) === String(eventId) &&
+                !document.getElementById('modal-participants').classList.contains('hidden')
+            ) {
+                participantsUpdated = await loadEventParticipants(eventId, 'participants', { silent: true });
+            }
+            if (!dashboardUpdated || !participantsUpdated) {
+                showToast('報名已新增，但最新畫面尚未完全同步；請按「重整」更新名單。', 'info');
+            }
         }
 
         function openAdminRemarkModal(regId, studentName) {
@@ -4450,9 +4540,10 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             }
         }
 
-        async function loadEventParticipants(eventId, destination = 'participants') {
+        async function loadEventParticipants(eventId, destination = 'participants', options = {}) {
             if (!state.adminCreds) return;
-            showGlobalLoading(true, destination === 'notify' ? '正在載入通知名單…' : '正在載入報名名單…');
+            const silent = options && options.silent === true;
+            if (!silent) showGlobalLoading(true, destination === 'notify' ? '正在載入通知名單…' : '正在載入報名名單…');
             try {
                 const response = await apiRequest({
                     action: 'getAdminEventParticipants',
@@ -4460,7 +4551,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     adminAcc: state.adminCreds.acc,
                     adminToken: state.adminCreds.token
                 }, ADMIN_DATA_TIMEOUT_MS);
-                if (checkTokenExpiration(response)) return;
+                if (checkTokenExpiration(response)) return false;
                 if (!response.success) throw new Error(response.error || '報名名單載入失敗');
                 state.registrations = state.registrations
                     .filter(registration => String(registration.eventId) !== String(eventId))
@@ -4468,10 +4559,12 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 if (response.data.lineUsage) state.lineUsage = response.data.lineUsage;
                 if (destination === 'notify') window.openNotifyModal(eventId);
                 else window.openParticipantsModal(eventId);
+                return true;
             } catch (error) {
-                showToast(getRequestErrorMessage(error, '報名名單暫時無法載入'), 'error');
+                if (!silent) showToast(getRequestErrorMessage(error, '報名名單暫時無法載入'), 'error');
+                return false;
             } finally {
-                showGlobalLoading(false);
+                if (!silent) showGlobalLoading(false);
             }
         }
 
