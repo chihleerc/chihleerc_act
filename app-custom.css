@@ -1455,7 +1455,21 @@
 
         @media (max-width: 767px) {
             nav > div { padding-inline: 12px !important; }
-            nav .h-auto { align-items: flex-start !important; flex-wrap: wrap; }
+            nav .h-auto {
+                position: relative;
+                display: grid !important;
+                grid-template-columns: minmax(0, 1fr);
+                align-items: start !important;
+                gap: .65rem !important;
+                width: 100%;
+            }
+            nav .h-auto > div:first-child {
+                width: 100%;
+                min-width: 0;
+                padding-right: 3.25rem;
+            }
+            nav .h-auto > div:first-child span:first-child { font-size: .95rem !important; }
+            #version-display { max-width: calc(100vw - 7.5rem) !important; }
             #primary-nav-actions {
                 display: grid !important;
                 grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1465,6 +1479,19 @@
                 padding-bottom: 2px;
             }
             #primary-nav-actions > * + * { margin-left: 0 !important; }
+            #nav-admin-badge,
+            #nav-staff-badge { display: none !important; }
+            #nav-logout-btn {
+                position: absolute !important;
+                top: 0;
+                right: 0;
+                z-index: 3;
+                width: 44px !important;
+                min-width: 44px !important;
+                height: 44px !important;
+                padding: 0 !important;
+                background: rgba(255, 255, 255, .12) !important;
+            }
             #nav-calendar-btn,
             #nav-student-btn,
             #nav-query-btn,
@@ -1479,9 +1506,142 @@
                 border-radius: 10px !important;
                 font-size: 1.45rem !important;
             }
+            #nav-teacher-btn[data-logged-in="true"] { position: relative; }
+            #nav-teacher-btn[data-logged-in="true"]::after {
+                content: "";
+                position: absolute;
+                top: 8px;
+                right: calc(50% - 18px);
+                width: 9px;
+                height: 9px;
+                background: #34D399;
+                border: 2px solid #FFFFFF;
+                border-radius: 999px;
+            }
             #primary-nav-actions > button > i { margin: 0 !important; }
             #primary-nav-actions > button > span { display: none !important; }
             main { padding-top: 16px !important; }
+
+            /* 手機後台：清單改為卡片，避免桌機固定欄遮住活動名稱。 */
+            #view-teacher-dashboard,
+            #adminActivitySection,
+            #admin-list-toolbar,
+            #admin-list-filters { min-width: 0; max-width: 100%; }
+            #admin-primary-filters {
+                display: grid !important;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                width: 100% !important;
+            }
+            #admin-primary-filters select {
+                width: 100% !important;
+                min-width: 0 !important;
+                padding-inline: .45rem !important;
+            }
+            #admin-list-actions > button {
+                flex: 1 1 0 !important;
+                width: auto !important;
+                min-width: 0 !important;
+                padding-inline: .65rem !important;
+            }
+            .admin-events-scroll {
+                max-height: none !important;
+                overflow: visible !important;
+                background: transparent !important;
+                border: 0 !important;
+                box-shadow: none !important;
+            }
+            .admin-events-table {
+                display: block;
+                width: 100% !important;
+                min-width: 0 !important;
+                table-layout: auto;
+                white-space: normal !important;
+            }
+            .admin-events-table colgroup,
+            .admin-events-table thead { display: none !important; }
+            .admin-events-table tbody {
+                display: grid;
+                gap: .85rem;
+                width: 100%;
+                background: transparent !important;
+            }
+            .admin-events-table tbody > tr {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) auto;
+                grid-template-areas:
+                    "category status"
+                    "title title"
+                    "sessions sessions"
+                    "actions actions";
+                width: 100%;
+                min-width: 0;
+                overflow: hidden;
+                background: #FFFFFF !important;
+                border: 1px solid #C8DCEC !important;
+                border-radius: 12px;
+                box-shadow: 0 4px 14px rgba(16, 42, 67, .08);
+            }
+            .admin-events-table tbody > tr > td {
+                position: static !important;
+                left: auto !important;
+                right: auto !important;
+                display: block;
+                width: auto !important;
+                min-width: 0;
+                padding: .75rem .85rem !important;
+                background: transparent !important;
+                border: 0 !important;
+                box-shadow: none !important;
+                white-space: normal !important;
+            }
+            .admin-events-table tbody > tr > td:only-child { grid-column: 1 / -1; }
+            .admin-event-category-cell { grid-area: category; align-self: start; }
+            .admin-event-title-cell {
+                grid-area: title;
+                padding-top: .25rem !important;
+                color: var(--ink) !important;
+                border-top: 1px solid #E4EDF5 !important;
+            }
+            .admin-event-title {
+                display: block;
+                font-size: 1rem;
+                font-weight: 850;
+                line-height: 1.55;
+                word-break: normal;
+                overflow-wrap: anywhere;
+            }
+            .admin-event-sessions-cell {
+                grid-area: sessions;
+                border-top: 1px solid #E4EDF5 !important;
+                border-bottom: 1px solid #E4EDF5 !important;
+            }
+            .admin-event-status-cell { grid-area: status; align-self: start; }
+            .admin-event-status-stack { align-items: flex-end; width: auto; min-height: 0; }
+            .admin-event-actions-cell { grid-area: actions; }
+            .admin-event-actions {
+                align-items: center;
+                justify-content: space-around;
+                gap: .4rem;
+                min-height: 44px;
+            }
+            .admin-event-actions > button {
+                flex: 1 1 0;
+                width: auto;
+                min-width: 44px;
+                min-height: 44px;
+                margin: 0 !important;
+                font-size: 1.2rem !important;
+            }
+            .admin-session-row { margin-left: 0; padding-left: .4rem; }
+            .admin-session-line {
+                grid-template-columns: 1.25rem minmax(6.4rem, 1fr) minmax(5.2rem, .8fr) 4.2rem;
+                gap: .2rem;
+                width: 100%;
+                font-size: .72rem;
+            }
+            .admin-session-number { width: 1.25rem; }
+            .admin-session-location { margin-left: 1.65rem; }
+            #admin-pagination-container { padding-inline: .25rem; }
             .calendar-view-heading { align-items: stretch; flex-direction: column; padding: 1rem; }
             .calendar-today-button { align-self: flex-start; }
             .calendar-layout { gap: .85rem; }

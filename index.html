@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 致理．心夥伴 - 活動報名系統｜伺服器分頁與身分分離版 V11.21.10｜2026-09-15 23:40 -->
+<!-- 致理．心夥伴 - 活動報名系統｜手機後台卡片版 V11.21.11｜2026-09-16 01:22 -->
 <html lang="zh-TW" class="frame-guard-pending">
 <head>
     <meta charset="UTF-8">
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
 
-    <link rel="stylesheet" href="app-custom.css?v=11.21.10-20260915">
+    <link rel="stylesheet" href="app-custom.css?v=11.21.11-202609160122">
 
 </head>
 <body class="text-gray-800 antialiased min-h-screen flex flex-col relative w-full">
@@ -231,15 +231,15 @@
             </div>
 
             <div id="adminActivitySection" class="hidden w-full">
-                <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4 md:mb-6 gap-3 md:gap-4 w-full">
-                    <div class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 md:gap-3 w-full lg:w-auto flex-grow">
+                <div id="admin-list-toolbar" class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4 md:mb-6 gap-3 md:gap-4 w-full">
+                    <div id="admin-list-filters" class="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 md:gap-3 w-full lg:w-auto flex-grow">
                         <div class="relative flex-grow sm:max-w-xs w-full">
                             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 <i class="fa-solid fa-magnifying-glass text-gray-400"></i>
                             </div>
                             <input type="text" id="teacher-search-input" data-input-action="render-dashboard" placeholder="搜尋活動名稱..." class="w-full border border-gray-300 rounded-md pl-10 pr-3 py-2 text-sm focus:ring-chihlee-blue outline-none bg-white shadow-sm">
                         </div>
-                        <div class="flex gap-2 w-full sm:w-auto">
+                        <div id="admin-primary-filters" class="flex gap-2 w-full sm:w-auto">
                             <select id="teacher-scope-filter" data-change-action="load-admin-page" aria-label="活動時間範圍" class="flex-1 sm:flex-none border border-blue-300 rounded-md px-2 py-2 text-sm font-bold text-chihlee-blue focus:ring-chihlee-blue outline-none bg-blue-50 shadow-sm">
                                 <option value="upcoming">即將到來</option>
                                 <option value="expired">已過期活動</option>
@@ -255,7 +255,7 @@
                         </div>
                         <select id="teacher-name-filter" data-change-action="render-dashboard" class="w-full sm:w-auto border border-gray-300 rounded-md px-2 py-2 text-sm font-medium text-gray-700 focus:ring-chihlee-blue outline-none bg-white shadow-sm"></select>
                     </div>
-                    <div class="flex gap-2 w-full lg:w-auto flex-shrink-0">
+                    <div id="admin-list-actions" class="flex gap-2 w-full lg:w-auto flex-shrink-0">
                         <button data-action="reload-data" class="w-full lg:w-auto bg-white text-gray-700 px-4 py-2.5 rounded-lg shadow-sm hover:bg-gray-50 transition flex items-center justify-center text-sm font-bold flex-shrink-0 border border-gray-200">
                             <i class="fa-solid fa-rotate mr-2"></i>重整
                         </button>
@@ -265,7 +265,7 @@
                     </div>
                 </div>
 
-                <div class="bg-white rounded-xl shadow-md border border-gray-100 overflow-x-auto w-full block custom-scroll max-h-[70vh] relative">
+                <div class="admin-events-scroll bg-white rounded-xl shadow-md border border-gray-100 overflow-x-auto w-full block custom-scroll max-h-[70vh] relative">
                     <table class="admin-events-table w-full whitespace-nowrap text-left">
                         <colgroup>
                             <col class="col-width-100">
@@ -801,7 +801,7 @@
         <div id="loader-elapsed" class="loader-elapsed" aria-live="off"></div>
     </div>
 
-    <script src="app.js?v=11.21.10-20260915" defer></script>
+    <script src="app.js?v=11.21.11-202609160122" defer></script>
 
 </body>
 </html>

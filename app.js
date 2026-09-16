@@ -465,9 +465,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         // 固定記錄這一版完成修改的時間，不會因登入、重新整理或查詢資料而改變。
-        const VERSION_LABEL = 'V11.21.10';
-        const VERSION_UPDATED_AT = '2026/09/15 23:40';
-        const VERSION_UPDATED_AT_ISO = '2026-09-15T23:40:00+08:00';
+        const VERSION_LABEL = 'V11.21.11';
+        const VERSION_UPDATED_AT = '2026/09/16 01:22';
+        const VERSION_UPDATED_AT_ISO = '2026-09-16T01:22:00+08:00';
         const API_TIMEOUT_MS = 20000;
         const LOGIN_TIMEOUT_MS = 25000;
         const ADMIN_DATA_TIMEOUT_MS = 45000;
@@ -1710,6 +1710,12 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
 
             if (state.isTeacherLoggedIn && state.currentUserRole === 'staff') {
                 document.getElementById('nav-staff-badge').innerHTML = `<i class="fa-solid fa-user-shield mr-1"></i><span class="hidden sm:inline">${escapeHTML(state.currentUserName)}</span>`;
+            }
+            const teacherNavButton = document.getElementById('nav-teacher-btn');
+            if (teacherNavButton) {
+                teacherNavButton.dataset.loggedIn = state.isTeacherLoggedIn ? 'true' : 'false';
+                teacherNavButton.title = state.isTeacherLoggedIn ? `系統後台（${state.currentUserName || '已登入'}）` : '系統後台';
+                teacherNavButton.setAttribute('aria-label', teacherNavButton.title);
             }
 
             // 修復先前彈窗結束後偶發殘留的 body 捲動鎖定。
@@ -3087,17 +3093,17 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 const tr = document.createElement('tr');
                 tr.className = `border-b border-gray-100 transition hover:bg-blue-50 even:bg-slate-50 odd:bg-white group`;
                 tr.innerHTML = `
-                    <td class="px-4 md:px-6 py-4 align-top sticky left-0 z-10 bg-inherit shadow-[2px_0_5px_rgba(0,0,0,0.02)] border-r border-gray-100">
+                    <td class="admin-event-category-cell px-4 md:px-6 py-4 align-top sticky left-0 z-10 bg-inherit shadow-[2px_0_5px_rgba(0,0,0,0.02)] border-r border-gray-100">
                         <span class="${categoryBadgeClass}">${escapeHTML(ev.category)}</span>
                         ${ev.isOneOnOne ? '<br><span class="inline-block px-2 py-0.5 mt-1 rounded-md text-[10px] md:text-xs font-bold bg-red-100 text-red-700 border border-red-300 whitespace-nowrap">一對一</span>' : ''}
                         ${isSeries ? '<br><span class="inline-block px-2 py-0.5 mt-1 rounded text-[10px] md:text-xs font-bold bg-purple-100 text-purple-700 whitespace-nowrap">系列</span>' : ''}
                     </td>
-                    <td class="px-4 md:px-6 py-4 align-top font-medium ${isPast ? 'text-gray-500' : 'text-gray-900'} md:sticky md:left-[100px] md:z-10 bg-inherit shadow-none md:shadow-[2px_0_5px_rgba(0,0,0,0.02)] border-r border-gray-100">
+                    <td class="admin-event-title-cell px-4 md:px-6 py-4 align-top font-medium ${isPast ? 'text-gray-500' : 'text-gray-900'} md:sticky md:left-[100px] md:z-10 bg-inherit shadow-none md:shadow-[2px_0_5px_rgba(0,0,0,0.02)] border-r border-gray-100">
                         <div class="whitespace-normal leading-relaxed"><span class="admin-event-title min-w-0 break-words">${escapeHTML(ev.title)}</span></div>
                         <span class="text-xs text-gray-500 block mt-2 whitespace-nowrap"><i class="fa-solid fa-user-tie mr-1"></i>${escapeHTML(ev.teacher || '未設定')}</span>
                         ${mainLocationBadges}
                     </td>
-                    <td class="px-4 md:px-6 py-4 text-xs md:text-sm leading-relaxed align-top">${datesHTML}</td>
+                    <td class="admin-event-sessions-cell px-4 md:px-6 py-4 text-xs md:text-sm leading-relaxed align-top">${datesHTML}</td>
                     <td class="admin-event-status-cell px-4 md:px-6 py-4 text-center align-top">
                         <div class="admin-event-status-stack">
                             ${publicationStatusHtml}
