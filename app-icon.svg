@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">致理心夥伴活動報名系統</title>
+  <desc id="desc">兩位夥伴共同守護黃色愛心的藍色圖示</desc>
   <rect width="512" height="512" rx="112" fill="#0057B8"/>
   <circle cx="174" cy="160" r="43" fill="#FFFFFF"/>
   <circle cx="338" cy="160" r="43" fill="#FFFFFF"/>

@@ -146,6 +146,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             const actions = {
                 'switch-view': () => switchView(target.dataset.view),
                 'toggle-student-steps': () => toggleStudentSteps(),
+                'toggle-calendar-guide': () => toggleCalendarGuide(),
                 'calendar-prev': () => changeCalendarMonth(-1),
                 'calendar-next': () => changeCalendarMonth(1),
                 'calendar-today': () => resetCalendarToToday(),
@@ -465,9 +466,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         // 固定記錄這一版完成修改的時間，不會因登入、重新整理或查詢資料而改變。
-        const VERSION_LABEL = 'V11.21.13';
-        const VERSION_UPDATED_AT = '2026/09/16 19:20';
-        const VERSION_UPDATED_AT_ISO = '2026-09-16T19:20:00+08:00';
+        const VERSION_LABEL = 'V11.21.14';
+        const VERSION_UPDATED_AT = '2026/09/17 08:58';
+        const VERSION_UPDATED_AT_ISO = '2026-09-17T08:58:00+08:00';
         const API_TIMEOUT_MS = 20000;
         const LOGIN_TIMEOUT_MS = 25000;
         const ADMIN_DATA_TIMEOUT_MS = 45000;
@@ -1122,7 +1123,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         function renderEventImagePlaceholder() {
             return `
                 <div class="event-image-placeholder" aria-label="此活動尚無圖片">
-                    <span class="event-image-placeholder-logo" aria-hidden="true">致</span>
+                    <img src="app-icon.svg?v=11.21.14-202609170858" class="event-image-placeholder-logo" alt="" aria-hidden="true">
                     <span>尚無活動圖片</span>
                 </div>`;
         }
@@ -1647,6 +1648,15 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             const expanded = button.getAttribute('aria-expanded') === 'true';
             button.setAttribute('aria-expanded', String(!expanded));
             steps.classList.toggle('is-expanded', !expanded);
+        }
+
+        function toggleCalendarGuide() {
+            const button = document.querySelector('[data-action="toggle-calendar-guide"]');
+            const content = document.getElementById('calendar-guide-content');
+            if (!button || !content) return;
+            const expanded = button.getAttribute('aria-expanded') === 'true';
+            button.setAttribute('aria-expanded', String(!expanded));
+            content.classList.toggle('is-expanded', !expanded);
         }
 
         function switchView(viewName) {
