@@ -145,8 +145,6 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             }
             const actions = {
                 'switch-view': () => switchView(target.dataset.view),
-                'toggle-student-steps': () => toggleStudentSteps(),
-                'toggle-calendar-guide': () => toggleCalendarGuide(),
                 'calendar-prev': () => changeCalendarMonth(-1),
                 'calendar-next': () => changeCalendarMonth(1),
                 'calendar-today': () => resetCalendarToToday(),
@@ -466,9 +464,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         // 固定記錄這一版完成修改的時間，不會因登入、重新整理或查詢資料而改變。
-        const VERSION_LABEL = 'V11.21.14';
-        const VERSION_UPDATED_AT = '2026/09/17 08:58';
-        const VERSION_UPDATED_AT_ISO = '2026-09-17T08:58:00+08:00';
+        const VERSION_LABEL = 'V11.21.15';
+        const VERSION_UPDATED_AT = '2026/09/18 17:29';
+        const VERSION_UPDATED_AT_ISO = '2026-09-18T17:29:00+08:00';
         const API_TIMEOUT_MS = 20000;
         const LOGIN_TIMEOUT_MS = 25000;
         const ADMIN_DATA_TIMEOUT_MS = 45000;
@@ -503,6 +501,13 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 const loaderText = document.getElementById('loader-text');
                 if (loader && loaderText && !loader.classList.contains('hidden')) loaderText.innerText = delayedText;
             }, delayMs);
+        }
+
+        function updateAdminLoadingStatus(title, detail) {
+            const titleElement = document.getElementById('admin-load-title');
+            const detailElement = document.getElementById('admin-load-detail');
+            if (titleElement) titleElement.textContent = title;
+            if (detailElement) detailElement.textContent = detail;
         }
 
         function isPlainObject(value) {
@@ -835,8 +840,12 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 if (loadDetail) loadDetail.textContent = '活動資料讀取中，請稍候……';
                 const slowNoticeTimer = window.setTimeout(() => {
                     if (loadTitle) loadTitle.textContent = '活動資料仍在讀取中';
-                    if (loadDetail) loadDetail.textContent = '請稍候，系統正在自動完成資料讀取。';
-                }, 8000);
+                    if (loadDetail) loadDetail.textContent = 'Google 服務回應較慢，請稍候，請勿重複點擊。';
+                }, 5000);
+                const confirmNoticeTimer = window.setTimeout(() => {
+                    if (loadTitle) loadTitle.textContent = '系統正在確認資料';
+                    if (loadDetail) loadDetail.textContent = '請保持頁面開啟，系統會自動重試。';
+                }, 15000);
 
                 try {
                     for (let attempt = 1; attempt <= PUBLIC_DATA_MAX_ATTEMPTS; attempt++) {
@@ -866,17 +875,18 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                             lastError = error;
                             console.warn(`[public-data attempt ${attempt}]`, error);
                             if (attempt >= PUBLIC_DATA_MAX_ATTEMPTS || !isRetryablePublicDataError(error)) break;
-                            if (loadTitle) loadTitle.textContent = '活動資料讀取中';
-                            if (loadDetail) loadDetail.textContent = `連線暫時不穩，系統正在自動重試（${attempt + 1}/${PUBLIC_DATA_MAX_ATTEMPTS}）……`;
+                            if (loadTitle) loadTitle.textContent = '連線暫時不穩';
+                            if (loadDetail) loadDetail.textContent = `正在自動重試（${attempt + 1}/${PUBLIC_DATA_MAX_ATTEMPTS}）……`;
                             await waitForRetry(attempt * 1200);
                         }
                     }
                 } finally {
                     window.clearTimeout(slowNoticeTimer);
+                    window.clearTimeout(confirmNoticeTimer);
                     showSkeletonLoading(false);
                     if (!loaded) {
                         console.error('[public-data unavailable]', lastError);
-                        setInitialLoadError('活動清單正在更新，請稍候片刻後重新載入。');
+                        setInitialLoadError('暫時無法載入資料。您的頁面狀態已保留，可稍後重新讀取。');
                     }
                 }
                 return loaded;
@@ -1123,7 +1133,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         function renderEventImagePlaceholder() {
             return `
                 <div class="event-image-placeholder" aria-label="此活動尚無圖片">
-                    <img src="app-icon.svg?v=11.21.14-202609170858" class="event-image-placeholder-logo" alt="" aria-hidden="true">
+                    <img src="app-icon.svg?v=11.21.15-202609181729" class="event-image-placeholder-logo" alt="" aria-hidden="true">
                     <span>尚無活動圖片</span>
                 </div>`;
         }
@@ -1641,24 +1651,6 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             };
         }
 
-        function toggleStudentSteps() {
-            const button = document.querySelector('[data-action="toggle-student-steps"]');
-            const steps = document.getElementById('student-steps-list');
-            if (!button || !steps) return;
-            const expanded = button.getAttribute('aria-expanded') === 'true';
-            button.setAttribute('aria-expanded', String(!expanded));
-            steps.classList.toggle('is-expanded', !expanded);
-        }
-
-        function toggleCalendarGuide() {
-            const button = document.querySelector('[data-action="toggle-calendar-guide"]');
-            const content = document.getElementById('calendar-guide-content');
-            if (!button || !content) return;
-            const expanded = button.getAttribute('aria-expanded') === 'true';
-            button.setAttribute('aria-expanded', String(!expanded));
-            content.classList.toggle('is-expanded', !expanded);
-        }
-
         function switchView(viewName) {
             document.getElementById('view-calendar').classList.add('hidden'); document.getElementById('view-student').classList.add('hidden'); document.getElementById('view-teacher-login').classList.add('hidden');
             document.getElementById('view-teacher-dashboard').classList.add('hidden'); document.getElementById('bulk-action-bar').classList.add('hidden');
@@ -1807,8 +1799,16 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             const requestSequence = ++adminDataRequestSequence;
             document.getElementById('admin-entry-panel').classList.add('hidden');
             if (!silent && !state.adminDataLoaded) showSkeletonLoading(true);
-            if (!silent) showGlobalLoading(true, '正在載入活動清單（每次 5 項）…');
-            const slowNotice = silent ? null : startLongRequestNotice('Google 仍在讀取活動資料；不會重複送出請求…', 9000);
+            if (!silent) {
+                updateAdminLoadingStatus('後台資料載入中', '正在讀取即將到來的活動（每次 5 項）……');
+                showGlobalLoading(true, '資料讀取中，正在連線至 Google 雲端服務……');
+            }
+            const slowNotice = silent ? null : startLongRequestNotice('資料仍在讀取中｜Google 服務回應較慢，請勿重複點擊。', 5000);
+            const confirmNotice = silent ? null : window.setTimeout(() => {
+                updateAdminLoadingStatus('系統正在確認資料', '請保持頁面開啟；登入狀態已保留，可稍後重新讀取。');
+                const loaderText = document.getElementById('loader-text');
+                if (loaderText) loaderText.innerText = '系統正在確認資料，請保持頁面開啟……';
+            }, 15000);
             try {
                 const scopeSelect = document.getElementById('teacher-scope-filter');
                 const yearSelect = document.getElementById('teacher-year-filter');
@@ -1853,10 +1853,11 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             } catch (error) {
                 if (requestSequence !== adminDataRequestSequence) return false;
                 if (!state.adminDataLoaded) document.getElementById('admin-entry-panel').classList.remove('hidden');
-                if (!silent) showToast(`後台資料尚未載入：${getRequestErrorMessage(error)}。可先使用「快速新增活動」。`, 'error');
+                if (!silent) showToast(`暫時無法載入管理資料：${getRequestErrorMessage(error)}。登入狀態已保留，可重試或先使用「快速新增活動」。`, 'error');
                 return false;
             } finally {
                 if (slowNotice) clearTimeout(slowNotice);
+                if (confirmNotice) clearTimeout(confirmNotice);
                 if (!silent && requestSequence === adminDataRequestSequence) {
                     showSkeletonLoading(false);
                     showGlobalLoading(false);
@@ -1880,7 +1881,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 loginBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i>登入中...';
             }
             showGlobalLoading(true, '安全連線驗證中...');
-            const slowLoginNotice = startLongRequestNotice('Google 服務回應較慢，仍在安全驗證中…');
+            const slowLoginNotice = startLongRequestNotice('登入驗證仍在進行｜Google 服務回應較慢，請勿重複點擊。', 5000);
+            const confirmLoginNotice = startLongRequestNotice('系統正在確認登入結果，請保持頁面開啟……', 15000);
 
             try {
                 const res = await apiRequest({ action: 'loginFast', account: acc, password: pwd }, LOGIN_TIMEOUT_MS);
@@ -1909,6 +1911,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     document.getElementById('teacher-name-filter').innerHTML = '';
 
                     clearTimeout(slowLoginNotice);
+                    clearTimeout(confirmLoginNotice);
                     showGlobalLoading(false);
                     updateVersionTime();
                     switchView('teacherDashboard');
@@ -1925,6 +1928,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 showToast(message, 'error');
             } finally {
                 clearTimeout(slowLoginNotice);
+                clearTimeout(confirmLoginNotice);
                 if (loginBtn) {
                     loginBtn.disabled = false;
                     loginBtn.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -2038,9 +2042,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
         window.addEventListener('resize', scheduleDescriptionClamp);
 
-        function renderStudentSessionRow(event, item, showCapacity) {
+        function renderStudentSessionRow(event, item, showCapacity, capacityOverride = null) {
             const session = item.session;
-            const capacityStatus = getSessionCapacityStatus(event, session);
+            const capacityStatus = capacityOverride || getSessionCapacityStatus(event, session);
             const capacityHtml = showCapacity
                 ? `<span class="${capacityStatus.isFull ? 'session-capacity-full' : 'session-capacity-available'}">${capacityStatus.isFull ? '已額滿' : `剩 ${capacityStatus.remaining} 名`}</span>`
                 : '';
@@ -2084,7 +2088,22 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             const visibleLimit = event.isSeries ? 2 : (upcomingSessions.length > 3 ? 2 : upcomingSessions.length);
             const visibleSessions = upcomingSessions.slice(0, visibleLimit);
             const hiddenCount = Math.max(0, upcomingSessions.length - visibleSessions.length);
-            const rows = visibleSessions.map(item => renderStudentSessionRow(event, item, usesPerSessionCapacity(event))).join('');
+            const perSessionCapacity = usesPerSessionCapacity(event);
+            const showSharedCapacityOnSession = !perSessionCapacity && upcomingSessions.length === 1;
+            const sharedCapacityStatus = showSharedCapacityOnSession
+                ? {
+                    count: getEventRegistrationCount(event.id),
+                    limit: Math.max(1, Number(event.capacity) || 1),
+                    remaining: Math.max(0, Math.max(1, Number(event.capacity) || 1) - getEventRegistrationCount(event.id)),
+                    isFull: getEventRegistrationCount(event.id) >= Math.max(1, Number(event.capacity) || 1)
+                }
+                : null;
+            const rows = visibleSessions.map(item => renderStudentSessionRow(
+                event,
+                item,
+                perSessionCapacity || showSharedCapacityOnSession,
+                sharedCapacityStatus
+            )).join('');
             if (!rows) return '<p class="student-session-empty">目前沒有可報名場次</p>';
             return `${rows}${hiddenCount ? `<button type="button" data-action="open-event-details" data-event-id="${escapeHTML(String(event.id))}" aria-haspopup="dialog" aria-controls="modal-event-details" class="student-session-more">另有 ${hiddenCount} 個場次，查看全部</button>` : ''}`;
         }
@@ -2159,6 +2178,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
 
                 const upcomingSessions = getUpcomingEventSessions(ev, now);
                 const availableSessionCount = upcomingSessions.filter(item => !getSessionCapacityStatus(ev, item.session).isFull).length;
+                const showSharedCapacityOnSession = !isOoo && !perSessionCapacity && upcomingSessions.length === 1;
                 const sessionsHTML = renderStudentEventSessions(ev, now);
                 const eventImagesHtml = renderEventImageCarousel(ev, 'card');
                 const eventMediaHtml = eventImagesHtml || renderEventImagePlaceholder();
@@ -2171,9 +2191,11 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     ? (isFull
                         ? '<span class="px-2 py-0.5 text-[10px] md:text-xs font-bold rounded bg-red-100 text-red-700 border border-red-300 whitespace-nowrap">所有場次已額滿</span>'
                         : `<span class="px-2 py-0.5 text-[10px] md:text-xs font-bold rounded bg-sky-100 text-sky-800 border border-sky-300 whitespace-nowrap">尚有 ${availableSessionCount} 場可選</span>`)
-                    : ((isFull && !isAlreadyRegistered)
+                    : (showSharedCapacityOnSession
+                        ? ''
+                        : ((isFull && !isAlreadyRegistered)
                         ? '<span class="px-2 py-0.5 text-[10px] md:text-xs font-bold rounded bg-red-400 text-white shadow-sm whitespace-nowrap">已額滿</span>'
-                        : (!isAlreadyRegistered ? `<span class="px-2 py-0.5 text-[10px] md:text-xs font-medium rounded bg-gray-100 text-gray-500 border border-gray-200 whitespace-nowrap">剩 ${Math.max(0, ev.capacity - currentCount)} 名額</span>` : ''));
+                        : (!isAlreadyRegistered ? `<span class="px-2 py-0.5 text-[10px] md:text-xs font-medium rounded bg-gray-100 text-gray-500 border border-gray-200 whitespace-nowrap">剩 ${Math.max(0, ev.capacity - currentCount)} 名額</span>` : '')));
 
                 let compactStatusText = '';
                 let compactStatusClass = 'is-available';
@@ -2842,7 +2864,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         async function loadAdminLogs() {
             if (!state.adminCreds || state.adminLogsLoaded) return;
             const tbody = document.getElementById('admin-logs-tbody');
-            if (tbody) tbody.innerHTML = '<tr><td colspan="2" class="text-center py-8 text-gray-500"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>正在載入最近 100 筆紀錄…</td></tr>';
+            if (tbody) tbody.innerHTML = '<tr><td colspan="2" class="text-center py-8 text-gray-500"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>正在載入最近 50 筆紀錄…</td></tr>';
             try {
                 const res = await apiRequest({
                     action: 'getAdminLogs',
@@ -3149,8 +3171,11 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
 
         function renderLogs() {
             const tbody = document.getElementById('admin-logs-tbody'); if (!tbody) return;
-            if (state.logs.length === 0) { tbody.innerHTML = '<tr><td colspan="2" class="text-center py-4 text-gray-500">目前尚無動態紀錄</td></tr>'; return; }
-            tbody.innerHTML = state.logs.map(log => `<tr class="border-b border-gray-100 even:bg-slate-50 odd:bg-white hover:bg-blue-50 transition-colors"><td class="py-3 px-4 text-gray-500 whitespace-nowrap font-mono text-[10px] md:text-xs align-top">${escapeHTML(formatSafeDate(log.time))}</td><td class="py-3 px-4 text-gray-800 leading-relaxed text-xs md:text-sm whitespace-normal break-words align-top">${escapeHTML(log.message)}</td></tr>`).join('');
+            const visibleLogs = (Array.isArray(state.logs) ? state.logs : [])
+                .filter(log => !String(log && log.message || '').includes('登入系統'))
+                .slice(0, 50);
+            if (visibleLogs.length === 0) { tbody.innerHTML = '<tr><td colspan="2" class="text-center py-4 text-gray-500">目前尚無動態紀錄</td></tr>'; return; }
+            tbody.innerHTML = visibleLogs.map(log => `<tr class="border-b border-gray-100 even:bg-slate-50 odd:bg-white hover:bg-blue-50 transition-colors"><td class="py-3 px-4 text-gray-500 whitespace-nowrap font-mono text-[10px] md:text-xs align-top">${escapeHTML(formatSafeDate(log.time))}</td><td class="py-3 px-4 text-gray-800 leading-relaxed text-xs md:text-sm whitespace-normal break-words align-top">${escapeHTML(log.message)}</td></tr>`).join('');
         }
 
         function releaseTempImagePreviews() {

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 致理．心夥伴 - 活動報名系統｜品牌圖示與手機月曆精簡版 V11.21.14｜2026-09-17 08:58 -->
+<!-- 致理．心夥伴 - 活動報名系統｜手機版精簡、載入狀態與動態紀錄優化版 V11.21.15｜2026-09-18 17:29 -->
 <html lang="zh-TW" class="frame-guard-pending">
 <head>
     <meta charset="UTF-8">
@@ -11,17 +11,17 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="致理．心夥伴">
-    <link rel="icon" href="favicon.ico?v=11.21.14-202609170858" sizes="any">
-    <link rel="icon" type="image/svg+xml" href="favicon.svg?v=11.21.14-202609170858">
-    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=11.21.14-202609170858">
-    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png?v=11.21.14-202609170858">
-    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=11.21.14-202609170858">
-    <link rel="manifest" href="site.webmanifest?v=11.21.14-202609170858">
+    <link rel="icon" href="favicon.ico?v=11.21.15-202609181729" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg?v=11.21.15-202609181729">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=11.21.15-202609181729">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png?v=11.21.15-202609181729">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=11.21.15-202609181729">
+    <link rel="manifest" href="site.webmanifest?v=11.21.15-202609181729">
     <script src="frame-guard.js?v=11.20-20260910"></script>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
 
-    <link rel="stylesheet" href="app-custom.css?v=11.21.14-202609170858">
+    <link rel="stylesheet" href="app-custom.css?v=11.21.15-202609181729">
 
 </head>
 <body class="text-gray-800 antialiased min-h-screen flex flex-col relative w-full">
@@ -31,7 +31,7 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-auto py-3 md:py-0 md:h-16 gap-2 md:gap-3">
                 <div class="flex items-center cursor-pointer flex-shrink-0 min-w-0 flex-1 md:flex-none" data-action="switch-view" data-view="student">
-                    <img src="app-icon.svg?v=11.21.14-202609170858" class="site-brand-icon mr-2 md:mr-3 flex-shrink-0" width="36" height="36" alt="致理心夥伴圖示">
+                    <img src="app-icon.svg?v=11.21.15-202609181729" class="site-brand-icon mr-2 md:mr-3 flex-shrink-0" width="36" height="36" alt="致理心夥伴圖示">
                     <div class="flex flex-col md:flex-row md:items-end whitespace-nowrap min-w-0 truncate">
                         <span class="font-bold text-base md:text-xl tracking-wider leading-none truncate">致理．心夥伴 - 活動報名系統</span>
                         <span id="version-display" class="text-[9px] sm:text-[10px] md:text-xs text-blue-200 md:ml-3 mt-1 md:mt-0 font-mono tracking-tighter opacity-80 truncate block max-w-[150px] sm:max-w-none" title="版本更新時間">
@@ -61,13 +61,6 @@
                     <h1 id="calendar-view-title">活動月曆</h1>
                     <p class="calendar-summary-desktop">點選日期即可預覽當天活動、場次與剩餘名額，再前往報名。</p>
                     <p class="calendar-summary-mobile">點選日期查看當天活動</p>
-                    <button type="button" class="calendar-guide-toggle" data-action="toggle-calendar-guide" aria-expanded="false" aria-controls="calendar-guide-content">
-                        <span><i class="fa-solid fa-circle-info" aria-hidden="true"></i>日曆說明</span>
-                        <i class="fa-solid fa-chevron-down calendar-guide-chevron" aria-hidden="true"></i>
-                    </button>
-                    <div id="calendar-guide-content" class="calendar-guide-content">
-                        點選有色圓點的日期，可查看活動、場次與剩餘名額，再前往報名。綠色代表人際、紅色代表課業、黃色代表職涯。
-                    </div>
                 </div>
             </div>
 
@@ -104,10 +97,6 @@
             <div class="mb-6 md:mb-8 text-center relative px-2">
                 <h1 class="text-2xl md:text-3xl font-bold text-chihlee-blue mb-2">近期活動</h1>
                 <p class="text-sm md:text-base text-gray-600">查看日期與剩餘名額，勾選活動後即可一次完成報名。</p>
-                <button type="button" class="student-steps-toggle" data-action="toggle-student-steps" aria-expanded="false" aria-controls="student-steps-list">
-                    <span><i class="fa-solid fa-circle-info" aria-hidden="true"></i>報名說明</span>
-                    <i class="fa-solid fa-chevron-down student-steps-chevron" aria-hidden="true"></i>
-                </button>
                 <div id="student-steps-list" class="student-steps" aria-label="報名流程">
                     <span><b>1</b>瀏覽並勾選活動</span><span><b>2</b>填寫基本資料</span><span><b>3</b>確認送出報名</span>
                 </div>
@@ -189,7 +178,7 @@
         <div id="view-teacher-login" class="hidden max-w-md mx-auto mt-6 md:mt-10 animate-fade-in w-[90%] md:w-full">
             <div class="bg-white p-6 md:p-8 rounded-xl shadow-lg border-t-4 border-chihlee-red">
                 <div class="text-center mb-6">
-                    <img src="app-icon.svg?v=11.21.14-202609170858" class="login-brand-icon mb-4" width="64" height="64" alt="致理心夥伴圖示">
+                    <img src="app-icon.svg?v=11.21.15-202609181729" class="login-brand-icon mb-4" width="64" height="64" alt="致理心夥伴圖示">
                     <h2 class="text-xl md:text-2xl font-bold text-gray-800">系統後台登入</h2>
                     <div class="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200 text-xs md:text-sm text-center text-gray-600">
                         <p class="font-bold text-gray-700">⚠️ 安全連線確認</p>
@@ -233,7 +222,7 @@
 
             <!-- 骨架屏載入 (後台用) -->
             <div id="skeleton-admin" class="hidden space-y-4 max-w-full">
-                <div class="admin-loading-message"><i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i><div><strong>後台資料載入中</strong><p>正在讀取活動與報名資料，您可以稍候片刻。</p></div></div>
+                <div class="admin-loading-message"><i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i><div><strong id="admin-load-title">後台資料載入中</strong><p id="admin-load-detail">正在讀取活動與報名資料，您可以稍候片刻。</p></div></div>
                 <div class="animate-pulse bg-white p-4 rounded-xl border border-gray-200 h-16 w-full mb-4"></div>
                 <div class="animate-pulse bg-white p-5 rounded-xl border border-gray-200 h-96 w-full"></div>
             </div>
@@ -811,7 +800,7 @@
         <div id="loader-elapsed" class="loader-elapsed" aria-live="off"></div>
     </div>
 
-    <script src="app.js?v=11.21.14-202609170858" defer></script>
+    <script src="app.js?v=11.21.15-202609181729" defer></script>
 
 </body>
 </html>
