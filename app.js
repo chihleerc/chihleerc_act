@@ -4,7 +4,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             isTeacherLoggedIn: false, currentUserRole: null, currentUserName: null, currentFilter: '全部', studentDisplayMode: 'list',
             selectedEventIds: [], currentAdminEventId: null, currentRemarkStudent: null,
             tempTags: [], tempSessions: [], tempImages: [], tempImagesChanged: false, pendingEventCreateId: '', pendingAdminRegistrationId: '', adminCurrentPage: 1, editingRegId: null,
-            events: [], eventStats: {}, counselors: [], registrations: [], admins: [], logs: [], adminCreds: null, adminAddTempStudent: null, myRegistrations: [],
+            events: [], eventStats: {}, counselors: [], counselorsLoaded: false, registrations: [], admins: [], logs: [], adminCreds: null, adminAddTempStudent: null, myRegistrations: [],
             lineUsage: { month: '', used: 0, limit: 200, remaining: 200 }, dataQualityReport: null, archivePreview: null,
             studentIdentity: null, registeredEventIds: [], pendingRegistrationIds: {},
             eventCounts: new Map(), calendarYear: null, calendarMonth: null, calendarSelectedDate: '',
@@ -12,7 +12,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             adminDataLoaded: false, adminLogsLoaded: false, calendarFullDataLoaded: false,
             adminPagination: { page: 1, pageSize: 5, total: 0, totalPages: 1, scope: 'upcoming' },
             adminFilterOptions: { years: [], teachers: [] },
-            adminPageEvents: [], adminPageEventStats: {}, publicEventsSnapshot: [], publicEventStatsSnapshot: {}
+            adminPageEvents: [], adminPageEventStats: {}, publicEventsSnapshot: [], publicEventStatsSnapshot: {},
+            calendarEvents: [], calendarEventStats: {}
         };
 
         let isFormDirty = false;
@@ -377,7 +378,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 select.replaceChildren();
                 const placeholder = document.createElement('option');
                 placeholder.value = '';
-                placeholder.textContent = counselors.length ? '請選擇個管老師' : '目前無可選個管老師';
+                placeholder.textContent = counselors.length
+                    ? '請選擇個管老師'
+                    : (state.counselorsLoaded ? '目前無可選個管老師' : '個管老師名單尚未載入');
                 select.appendChild(placeholder);
                 counselors.forEach(name => {
                     const option = document.createElement('option');
@@ -387,6 +390,24 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 });
                 if (counselors.includes(previous)) select.value = previous;
             });
+        }
+
+        async function ensurePublicCounselorsLoaded() {
+            if (state.counselorsLoaded) return true;
+            if (counselorRequestPromise) return counselorRequestPromise;
+            counselorRequestPromise = (async () => {
+                const response = await apiRequest({ action: 'getPublicCounselors' }, PUBLIC_DATA_TIMEOUT_MS);
+                if (!response.success) throw new Error(response.error || '個管老師名單載入失敗');
+                state.counselors = response.data.counselors;
+                state.counselorsLoaded = true;
+                renderCounselorOptions();
+                return true;
+            })();
+            try {
+                return await counselorRequestPromise;
+            } finally {
+                counselorRequestPromise = null;
+            }
         }
 
         function clearStudentData() {
@@ -464,15 +485,17 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         // 固定記錄這一版完成修改的時間，不會因登入、重新整理或查詢資料而改變。
-        const VERSION_LABEL = 'V11.21.15';
-        const VERSION_UPDATED_AT = '2026/09/18 17:29';
-        const VERSION_UPDATED_AT_ISO = '2026-09-18T17:29:00+08:00';
+        const VERSION_LABEL = 'V11.21.17';
+        const VERSION_UPDATED_AT = '2026/09/18 22:30';
+        const VERSION_UPDATED_AT_ISO = '2026-09-18T22:30:00+08:00';
         const API_TIMEOUT_MS = 20000;
         const LOGIN_TIMEOUT_MS = 25000;
         const ADMIN_DATA_TIMEOUT_MS = 45000;
         const PUBLIC_DATA_TIMEOUT_MS = 18000;
         const PUBLIC_DATA_MAX_ATTEMPTS = 2;
         const PUBLIC_PAGE_SIZE = 8;
+        const PUBLIC_ACTIVITY_CACHE_KEY = 'chihlee_public_activity_cache_v112117';
+        const PUBLIC_ACTIVITY_CACHE_TTL_MS = 5 * 60 * 1000;
         const ADMIN_SESSION_STORAGE_KEY = 'chihlee_admin_session_v11210';
         const MUTATION_TIMEOUT_MS = 60000;
         const STATUS_CHECK_TIMEOUT_MS = 20000;
@@ -483,6 +506,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         const MAX_IMAGE_SOURCE_BYTES = 5 * 1024 * 1024;
         const TARGET_IMAGE_BYTES = 550 * 1024;
         let initialDataRequestPromise = null;
+        let calendarDataRequestPromise = null;
+        let counselorRequestPromise = null;
 
         function createRequestId() {
             if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
@@ -537,6 +562,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 typeof data.pagination.page !== 'number' || typeof data.pagination.total !== 'number' ||
                 typeof data.pagination.hasMore !== 'boolean' || !isPlainObject(data.pagination.categoryCounts)
             )) throw new Error('活動分頁資料格式不正確');
+            if (action === 'getPublicCounselors' && (!isPlainObject(data) || !Array.isArray(data.counselors))) throw new Error('個管老師資料格式不正確');
             if (action === 'getAdminFormOptions' && (!isPlainObject(data) || !Array.isArray(data.admins))) throw new Error('承辦人資料格式不正確');
             if (action === 'getAdminLogs' && (!isPlainObject(data) || !Array.isArray(data.logs))) throw new Error('動態紀錄格式不正確');
             if (action === 'getAdminData' && (!isPlainObject(data) || !isPlainObject(data.fullData))) throw new Error('後台資料格式不正確');
@@ -627,6 +653,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         async function apiRequest(payload, timeoutMs = API_TIMEOUT_MS) {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+            const requestStartedAt = performance.now();
             try {
                 const response = await fetch(GAS_API_URL, {
                     method: 'POST',
@@ -645,7 +672,17 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     invalidResponseError.code = 'INVALID_RESPONSE';
                     throw invalidResponseError;
                 }
-                return validateApiResponseShape(parsed, String(payload && payload.action || ''));
+                const validated = validateApiResponseShape(parsed, String(payload && payload.action || ''));
+                const elapsedMs = Math.round(performance.now() - requestStartedAt);
+                const serverMs = Number(parsed && parsed.meta && parsed.meta.durationMs);
+                if (elapsedMs >= 1000) {
+                    console.info('[效能]', String(payload && payload.action || 'unknown'), {
+                        totalMs: elapsedMs,
+                        serverMs: Number.isFinite(serverMs) ? serverMs : null,
+                        networkMs: Number.isFinite(serverMs) ? Math.max(0, elapsedMs - serverMs) : null
+                    });
+                }
+                return validated;
             } catch (error) {
                 if (error && error.name === 'AbortError') {
                     const timeoutError = new Error('連線逾時，請重新操作');
@@ -783,7 +820,10 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 state.publicEventsSnapshot = state.events.slice();
                 state.publicEventStatsSnapshot = { ...state.eventStats };
             }
-            state.counselors = Array.isArray(data.counselors) ? data.counselors : state.counselors;
+            if (Array.isArray(data.counselors) && data.counselors.length > 0) {
+                state.counselors = data.counselors;
+                state.counselorsLoaded = true;
+            }
             if (data.pagination) {
                 state.publicPage = data.pagination.page;
                 state.publicHasMore = data.pagination.hasMore;
@@ -827,11 +867,43 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             }
         }
 
-        async function fetchInitialData() {
+        function savePublicActivityCache(data) {
+            if (!data || !Array.isArray(data.events) || !data.pagination || Number(data.pagination.page) !== 1) return;
+            try {
+                localStorage.setItem(PUBLIC_ACTIVITY_CACHE_KEY, JSON.stringify({
+                    savedAt: Date.now(),
+                    data: { ...data, counselors: [] }
+                }));
+            } catch (error) {}
+        }
+
+        function restorePublicActivityCache() {
+            try {
+                const cached = JSON.parse(localStorage.getItem(PUBLIC_ACTIVITY_CACHE_KEY) || 'null');
+                if (!cached || !cached.savedAt || Date.now() - Number(cached.savedAt) > PUBLIC_ACTIVITY_CACHE_TTL_MS) {
+                    localStorage.removeItem(PUBLIC_ACTIVITY_CACHE_KEY);
+                    return false;
+                }
+                validateApiResponseShape({ success: true, data: cached.data }, 'getPublicDataPage');
+                mergePublicDataPage(cached.data, true);
+                pruneSelectedEventIds(state.events);
+                updateEventCounts();
+                renderStudentEvents();
+                clearInitialLoadError();
+                showSkeletonLoading(false);
+                return true;
+            } catch (error) {
+                localStorage.removeItem(PUBLIC_ACTIVITY_CACHE_KEY);
+                return false;
+            }
+        }
+
+        async function fetchInitialData(options = {}) {
             if (initialDataRequestPromise) return initialDataRequestPromise;
+            const preserveVisibleContent = options.preserveVisibleContent === true;
             initialDataRequestPromise = (async () => {
                 clearInitialLoadError();
-                showSkeletonLoading(true);
+                if (!preserveVisibleContent) showSkeletonLoading(true);
                 let loaded = false;
                 let lastError = null;
                 const loadTitle = document.getElementById('initial-load-title');
@@ -858,6 +930,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                             }
 
                             mergePublicDataPage(res.data, true);
+                            savePublicActivityCache(res.data);
                             pruneSelectedEventIds(state.events);
                             if (!state.isTeacherLoggedIn) {
                                 state.registrations = [];
@@ -883,10 +956,14 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 } finally {
                     window.clearTimeout(slowNoticeTimer);
                     window.clearTimeout(confirmNoticeTimer);
-                    showSkeletonLoading(false);
+                    if (!preserveVisibleContent) showSkeletonLoading(false);
                     if (!loaded) {
                         console.error('[public-data unavailable]', lastError);
-                        setInitialLoadError('暫時無法載入資料。您的頁面狀態已保留，可稍後重新讀取。');
+                        if (preserveVisibleContent) {
+                            showToast('最新資料暫時無法取得，目前顯示最近一次活動資料', 'info');
+                        } else {
+                            setInitialLoadError('暫時無法載入資料。您的頁面狀態已保留，可稍後重新讀取。');
+                        }
                     }
                 }
                 return loaded;
@@ -900,7 +977,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         async function retryInitialDataLoad() {
-            const loaded = await fetchInitialData();
+            const restoredFromCache = restorePublicActivityCache();
+            const loaded = await fetchInitialData({ preserveVisibleContent: restoredFromCache });
             if (!loaded) return;
             clearInitialLoadError();
             renderStudentEvents();
@@ -963,7 +1041,10 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                         if (!state.isTeacherLoggedIn) mergePublicDataPage(pubData.data, true);
                         else {
                             state.eventStats = { ...state.eventStats, ...pubData.data.eventStats };
-                            state.counselors = pubData.data.counselors;
+                            if (Array.isArray(pubData.data.counselors) && pubData.data.counselors.length > 0) {
+                                state.counselors = pubData.data.counselors;
+                                state.counselorsLoaded = true;
+                            }
                         }
                         pruneSelectedEventIds(state.events);
                         renderCounselorOptions();
@@ -1009,7 +1090,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 if (!response.success) return false;
                 const publicData = response.data;
                 state.eventStats = { ...state.eventStats, ...publicData.eventStats };
-                state.counselors = publicData.counselors;
+                savePublicActivityCache(publicData);
                 if (!state.isTeacherLoggedIn) mergePublicDataPage(publicData, false);
                 pruneSelectedEventIds(state.events);
                 renderCounselorOptions();
@@ -1133,7 +1214,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         function renderEventImagePlaceholder() {
             return `
                 <div class="event-image-placeholder" aria-label="此活動尚無圖片">
-                    <img src="app-icon.svg?v=11.21.15-202609181729" class="event-image-placeholder-logo" alt="" aria-hidden="true">
+                    <img src="app-icon.svg?v=11.21.17-202609182230" class="event-image-placeholder-logo" alt="" aria-hidden="true">
                     <span>尚無活動圖片</span>
                 </div>`;
         }
@@ -1407,9 +1488,45 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             if (!state.calendarSelectedDate) state.calendarSelectedDate = `${today.year}/${today.month}/${today.day}`;
         }
 
+        function getCalendarSourceEvents() {
+            if (state.calendarFullDataLoaded) return Array.isArray(state.calendarEvents) ? state.calendarEvents : [];
+            if (state.isTeacherLoggedIn) return Array.isArray(state.publicEventsSnapshot) ? state.publicEventsSnapshot : [];
+            return Array.isArray(state.events) ? state.events : [];
+        }
+
+        function getCalendarEventStats(eventId) {
+            const source = state.calendarFullDataLoaded ? state.calendarEventStats : state.eventStats;
+            return source && source[String(eventId)] ? source[String(eventId)] : {};
+        }
+
+        function getCalendarRegistrationCount(event) {
+            return Math.max(0, Number(getCalendarEventStats(event && event.id).registrationCount) || 0);
+        }
+
+        function getCalendarSessionCapacityStatus(event, session) {
+            const eventStats = getCalendarEventStats(event && event.id);
+            const sessionStats = Array.isArray(eventStats.sessionStats) ? eventStats.sessionStats : [];
+            const matchingSession = sessionStats.find(item =>
+                String(item && item.date || '') === String(session && session.date || '') &&
+                String(item && item.time || '') === String(session && session.time || '')
+            );
+            const perSession = event && (event.isOneOnOne || usesPerSessionCapacity(event));
+            const count = perSession
+                ? Math.max(0, Number(matchingSession && matchingSession.registrationCount) || 0)
+                : getCalendarRegistrationCount(event);
+            const limit = event && event.isOneOnOne ? 1 : Math.max(1, Number(event && event.capacity) || 1);
+            return { count, limit, remaining: Math.max(0, limit - count), isFull: count >= limit };
+        }
+
+        function invalidateCalendarData() {
+            state.calendarFullDataLoaded = false;
+            state.calendarEvents = [];
+            state.calendarEventStats = {};
+        }
+
         function getCalendarEventMap(now = new Date()) {
             const dateMap = new Map();
-            (Array.isArray(state.events) ? state.events : []).filter(isPublishedCalendarEvent).forEach(event => {
+            getCalendarSourceEvents().filter(isPublishedCalendarEvent).forEach(event => {
                 const eventDates = new Map();
                 (Array.isArray(event.sessions) ? event.sessions : []).forEach((session, index) => {
                     const start = getSessionStartDate(session);
@@ -1450,18 +1567,18 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         function renderCalendarEventAvailability(entry) {
             const event = entry.event;
             if (event.isOneOnOne) {
-                const available = entry.sessions.filter(item => !getSessionCapacityStatus(event, item.session).isFull);
+                const available = entry.sessions.filter(item => !getCalendarSessionCapacityStatus(event, item.session).isFull);
                 return available.length
                     ? `<span class="calendar-availability is-available">尚有 ${available.length} 個時段</span>`
                     : '<span class="calendar-availability is-full">已額滿</span>';
             }
             if (usesPerSessionCapacity(event)) {
                 return entry.sessions.map(item => {
-                    const status = getSessionCapacityStatus(event, item.session);
+                    const status = getCalendarSessionCapacityStatus(event, item.session);
                     return `<div class="calendar-session-line"><time>${escapeHTML(formatSessionTime(item.session.time))}</time><span class="calendar-availability ${status.isFull ? 'is-full' : 'is-available'}">${status.isFull ? '已額滿' : `剩 ${status.remaining} 名`}</span></div>`;
                 }).join('');
             }
-            const remaining = Math.max(0, Number(event.capacity || 0) - getEventRegistrationCount(event.id));
+            const remaining = Math.max(0, Number(event.capacity || 0) - getCalendarRegistrationCount(event));
             const isFull = Boolean(event.capacity && remaining === 0);
             const times = entry.sessions.map(item => escapeHTML(formatSessionTime(item.session.time))).join('、');
             return `<div class="calendar-session-line"><time>${times}</time><span class="calendar-availability ${isFull ? 'is-full' : 'is-available'}">${isFull ? '已額滿' : `剩 ${remaining} 名`}</span></div>`;
@@ -1555,6 +1672,19 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
 
         function goToEventFromCalendar(eventId) {
             const safeId = String(eventId || '');
+            const calendarEvent = (Array.isArray(state.calendarEvents) ? state.calendarEvents : []).find(item => String(item.id) === safeId);
+            if (calendarEvent) {
+                if (state.isTeacherLoggedIn) {
+                    if (!state.publicEventsSnapshot.some(item => String(item.id) === safeId)) state.publicEventsSnapshot.push(calendarEvent);
+                    const calendarStats = state.calendarEventStats && state.calendarEventStats[safeId];
+                    if (calendarStats) state.publicEventStatsSnapshot[safeId] = calendarStats;
+                } else if (!state.events.some(item => String(item.id) === safeId)) {
+                    state.events.push(calendarEvent);
+                    const calendarStats = state.calendarEventStats && state.calendarEventStats[safeId];
+                    if (calendarStats) state.eventStats[safeId] = calendarStats;
+                    updateEventCounts();
+                }
+            }
             filterEvents('全部');
             switchView('student');
             requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -1668,7 +1798,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 document.getElementById('nav-calendar-btn').className = 'nav-calendar-button is-active transition shrink-0';
                 document.getElementById('nav-calendar-btn').setAttribute('aria-current', 'page');
                 renderActivityCalendar();
-                if (!state.isTeacherLoggedIn && !state.calendarFullDataLoaded) void loadFullCalendarOnDemand();
+                if (!state.calendarFullDataLoaded) void loadFullCalendarOnDemand();
             } else if (viewName === 'student') {
                 if (state.isTeacherLoggedIn) {
                     if (state.publicEventsSnapshot.length > 0) {
@@ -1749,24 +1879,32 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         async function loadFullCalendarOnDemand() {
-            showGlobalLoading(true, '正在載入完整活動月曆…');
-            try {
-                const res = await apiRequest({ action: 'getPublicData' }, 30000);
-                if (!res.success) throw new Error(res.error || '活動月曆載入失敗');
-                state.events = res.data.events;
-                state.eventStats = res.data.eventStats;
-                state.adminPageEvents = res.data.events;
-                state.adminPageEventStats = res.data.eventStats;
-                state.counselors = res.data.counselors;
-                state.calendarFullDataLoaded = true;
-                state.publicHasMore = false;
-                state.publicTotal = state.events.length;
-                updateEventCounts();
+            if (state.calendarFullDataLoaded) {
                 renderActivityCalendar();
-            } catch (error) {
-                showToast(getRequestErrorMessage(error, '完整活動月曆暫時無法載入'), 'error');
+                return true;
+            }
+            if (calendarDataRequestPromise) return calendarDataRequestPromise;
+            calendarDataRequestPromise = (async () => {
+                showGlobalLoading(true, '正在載入完整活動月曆…');
+                try {
+                    const res = await apiRequest({ action: 'getPublicData' }, 30000);
+                    if (!res.success) throw new Error(res.error || '活動月曆載入失敗');
+                    state.calendarEvents = Array.isArray(res.data.events) ? res.data.events : [];
+                    state.calendarEventStats = isPlainObject(res.data.eventStats) ? res.data.eventStats : {};
+                    state.calendarFullDataLoaded = true;
+                    renderActivityCalendar();
+                    return true;
+                } catch (error) {
+                    showToast(getRequestErrorMessage(error, '完整活動月曆暫時無法載入'), 'error');
+                    return false;
+                } finally {
+                    showGlobalLoading(false);
+                }
+            })();
+            try {
+                return await calendarDataRequestPromise;
             } finally {
-                showGlobalLoading(false);
+                calendarDataRequestPromise = null;
             }
         }
 
@@ -1951,7 +2089,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             sessionStorage.removeItem(ADMIN_SESSION_STORAGE_KEY);
             state.adminDataLoaded = false; state.adminLogsLoaded = false;
             state.adminPageEvents = []; state.adminPageEventStats = {}; state.publicEventsSnapshot = []; state.publicEventStatsSnapshot = {};
-            state.events = []; state.eventStats = {}; state.counselors = []; state.registrations = []; state.logs = []; state.admins = [];
+            invalidateCalendarData();
+            state.events = []; state.eventStats = {}; state.counselors = []; state.counselorsLoaded = false; state.registrations = []; state.logs = []; state.admins = [];
             showToast('已安全登出', 'info'); switchView('student');
             await fetchInitialData(); renderStudentEvents();
         }
@@ -2405,12 +2544,22 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             `).join('');
         }
 
-        function openRegisterModal() {
+        async function openRegisterModal() {
             if (state.isTeacherLoggedIn) {
                 return showToast('您目前為登入狀態！若需協助學生報名，請至後台「報名名單」使用【個管老師新增】功能。', 'error');
             }
 
             if (state.selectedEventIds.length === 0) return showToast('請先勾選活動！', 'error');
+            if (!state.counselorsLoaded) {
+                showGlobalLoading(true, '正在載入個管老師名單…');
+                try {
+                    await ensurePublicCounselorsLoaded();
+                } catch (error) {
+                    return showToast(getRequestErrorMessage(error, '個管老師名單暫時無法載入，請稍後再試'), 'error');
+                } finally {
+                    showGlobalLoading(false);
+                }
+            }
             let hasFullError = false; let finalValidIds = [];
             state.selectedEventIds.forEach(eventId => {
                 const ev = state.events.find(e => String(e.id) === String(eventId));
@@ -2687,8 +2836,18 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             setTimeout(() => document.getElementById('query-student-id')?.focus(), 50);
         }
 
-        function openQueryModal() {
+        async function openQueryModal() {
             switchView('student');
+            if (!state.counselorsLoaded) {
+                showGlobalLoading(true, '正在載入個管老師名單…');
+                try {
+                    await ensurePublicCounselorsLoaded();
+                } catch (error) {
+                    return showToast(getRequestErrorMessage(error, '個管老師名單暫時無法載入，請稍後再試'), 'error');
+                } finally {
+                    showGlobalLoading(false);
+                }
+            }
             const identity = state.studentIdentity || {};
             const savedSid = identity.sid || '';
             const savedName = identity.name || '';
@@ -3729,6 +3888,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     if (existingIndex >= 0) state.events[existingIndex] = savedEvent;
                     else state.events.unshift(savedEvent);
                     state.pendingEventCreateId = '';
+                    invalidateCalendarData();
                     resetDirty();
                     showToast(id ? '活動與圖片儲存成功！' : '活動已建立為未公開草稿！', 'success');
                     closeEditEventModal();
@@ -3808,6 +3968,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 state.selectedEventIds = state.selectedEventIds.filter(id => String(id) !== String(eventId));
                 updateBulkActionBar();
             }
+            invalidateCalendarData();
             renderTeacherDashboard();
             if (!document.getElementById('view-student').classList.contains('hidden')) renderStudentEvents();
             if (!document.getElementById('view-calendar').classList.contains('hidden')) renderActivityCalendar();
@@ -3828,6 +3989,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     if (checkTokenExpiration(res)) return;
                     if (res.success) {
                         showToast('活動已刪除', 'success');
+                        invalidateCalendarData();
                         await loadAdminDashboard(state.adminCurrentPage, true);
                     } else showToast('刪除失敗', 'error');
                 } catch(e) { showToast(getRequestErrorMessage(e), 'error'); }
