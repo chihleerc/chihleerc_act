@@ -1726,11 +1726,47 @@
             #view-student > div:first-child { padding: 20px 18px; border-left-width: 5px; }
             .student-steps { display: none; grid-template-columns: 1fr; gap: 7px; margin-top: 9px; padding: 0 10px 3px; text-align: left; font-size: .76rem; }
             .student-steps b { width: 21px; height: 21px; font-size: .68rem; }
-            .student-list-toolbar { align-items: stretch; flex-direction: column; }
-            .student-display-switch { align-self: flex-end; }
-            #category-filters { width: 100%; overflow-x: auto; flex-wrap: nowrap !important; justify-content: flex-start !important; padding-bottom: 8px; }
-            #category-filters::before { position: sticky; left: 0; min-width: 72px; background: var(--canvas); z-index: 1; }
-            #category-filters button { flex: 0 0 auto; }
+            .student-list-toolbar {
+                align-items: center;
+                flex-direction: row;
+                gap: .4rem;
+                width: 100%;
+                margin-bottom: 1rem;
+            }
+            .student-list-toolbar #category-filters {
+                display: grid !important;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                flex: 1 1 auto;
+                min-width: 0;
+                width: auto;
+                gap: .28rem;
+                padding: 0;
+                overflow: visible;
+            }
+            #category-filters::before { display: none; }
+            #category-filters button {
+                min-width: 0;
+                min-height: 38px;
+                padding: .38rem .15rem !important;
+                font-size: .76rem !important;
+                line-height: 1;
+                white-space: nowrap;
+            }
+            #category-filters button span { display: none; }
+            .student-display-switch {
+                align-self: center;
+                flex: 0 0 auto;
+                gap: .12rem;
+                padding: .18rem;
+                border-radius: 9px;
+            }
+            .student-display-switch button {
+                width: 38px;
+                min-height: 38px;
+                padding: 0;
+                font-size: .92rem;
+            }
+            .student-display-switch .student-display-label { display: none; }
             .student-event-card { grid-template-columns: 1.6rem minmax(0, 1fr); gap: .7rem; padding: 1rem .9rem .9rem; }
             .student-event-header { min-height: 0; }
             .student-event-body { grid-template-columns: minmax(0, 1fr); gap: .8rem; padding-top: .85rem; }
