@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 致理．心夥伴 - 活動報名系統｜月曆與後台篩選資料分離版 V11.21.18｜2026-09-19 21:41 -->
+<!-- 致理．心夥伴 - 活動報名系統｜月曆與後台篩選資料分離版 V11.21.19｜2026-09-23 15:37 -->
 <html lang="zh-TW" class="frame-guard-pending">
 <head>
     <meta charset="UTF-8">
@@ -11,17 +11,17 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="致理．心夥伴">
-    <link rel="icon" href="favicon.ico?v=11.21.18-202609192141" sizes="any">
-    <link rel="icon" type="image/svg+xml" href="favicon.svg?v=11.21.18-202609192141">
-    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=11.21.18-202609192141">
-    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png?v=11.21.18-202609192141">
-    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=11.21.18-202609192141">
-    <link rel="manifest" href="site.webmanifest?v=11.21.18-202609192141">
+    <link rel="icon" href="favicon.ico?v=11.21.19-202609231537" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg?v=11.21.19-202609231537">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png?v=11.21.19-202609231537">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png?v=11.21.19-202609231537">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=11.21.19-202609231537">
+    <link rel="manifest" href="site.webmanifest?v=11.21.19-202609231537">
     <script src="frame-guard.js?v=11.20-20260910"></script>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
 
-    <link rel="stylesheet" href="app-custom.css?v=11.21.18-202609192141">
+    <link rel="stylesheet" href="app-custom.css?v=11.21.19-202609231537">
 
 </head>
 <body class="text-gray-800 antialiased min-h-screen flex flex-col relative w-full">
@@ -31,7 +31,7 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-auto py-3 md:py-0 md:h-16 gap-2 md:gap-3">
                 <div class="flex items-center cursor-pointer flex-shrink-0 min-w-0 flex-1 md:flex-none" data-action="switch-view" data-view="student">
-                    <img src="app-icon.svg?v=11.21.18-202609192141" class="site-brand-icon mr-2 md:mr-3 flex-shrink-0" width="36" height="36" alt="致理心夥伴圖示">
+                    <img src="app-icon.svg?v=11.21.19-202609231537" class="site-brand-icon mr-2 md:mr-3 flex-shrink-0" width="36" height="36" alt="致理心夥伴圖示">
                     <div class="flex flex-col md:flex-row md:items-end whitespace-nowrap min-w-0 truncate">
                         <span class="font-bold text-base md:text-xl tracking-wider leading-none truncate">致理．心夥伴 - 活動報名系統</span>
                         <span id="version-display" class="text-[9px] sm:text-[10px] md:text-xs text-blue-200 md:ml-3 mt-1 md:mt-0 font-mono tracking-tighter opacity-80 truncate block max-w-[150px] sm:max-w-none" title="版本更新時間">
@@ -178,7 +178,7 @@
         <div id="view-teacher-login" class="hidden max-w-md mx-auto mt-6 md:mt-10 animate-fade-in w-[90%] md:w-full">
             <div class="bg-white p-6 md:p-8 rounded-xl shadow-lg border-t-4 border-chihlee-red">
                 <div class="text-center mb-6">
-                    <img src="app-icon.svg?v=11.21.18-202609192141" class="login-brand-icon mb-4" width="64" height="64" alt="致理心夥伴圖示">
+                    <img src="app-icon.svg?v=11.21.19-202609231537" class="login-brand-icon mb-4" width="64" height="64" alt="致理心夥伴圖示">
                     <h2 class="text-xl md:text-2xl font-bold text-gray-800">系統後台登入</h2>
                     <div class="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200 text-xs md:text-sm text-center text-gray-600">
                         <p class="font-bold text-gray-700">⚠️ 安全連線確認</p>
@@ -603,8 +603,22 @@
                         <div class="event-image-editor">
                             <div class="event-image-editor-heading">
                                 <div>
-                                    <label class="block text-sm font-bold text-chihlee-blue">活動示意圖（選填，最多 3 張）</label>
-                                    <p class="event-image-help">支援 JPG、PNG、WebP；單張原始檔小於 5MB。系統會自動壓縮，第一張作為封面。</p>
+                                    <div class="event-image-title-row">
+                                        <label class="block text-sm font-bold text-chihlee-blue">活動示意圖（選填，最多 3 張）</label>
+                                        <details class="event-image-help-details">
+                                            <summary aria-label="查看活動圖片規格" title="查看活動圖片規格"><i class="fa-solid fa-info" aria-hidden="true"></i></summary>
+                                            <div class="event-image-help-popover" role="note">
+                                                <strong>活動圖片規格</strong>
+                                                <ul>
+                                                    <li>每個活動最多上傳 3 張圖片，第一張作為活動封面。</li>
+                                                    <li>系統會自動壓縮，圖片最長邊不超過 1600px。</li>
+                                                    <li>建議尺寸為 1600 × 1200px（4:3）。</li>
+                                                    <li>手機版會以 16:9 顯示，重要人物、文字及主體請放在圖片中央，避免遭到裁切。</li>
+                                                </ul>
+                                            </div>
+                                        </details>
+                                    </div>
+                                    <p class="event-image-help">支援 JPG、PNG、WebP；單張原始檔小於 5MB。</p>
                                 </div>
                                 <button type="button" data-action="choose-event-images" class="event-image-choose-button"><i class="fa-regular fa-images" aria-hidden="true"></i>選擇圖片</button>
                             </div>
@@ -800,7 +814,7 @@
         <div id="loader-elapsed" class="loader-elapsed" aria-live="off"></div>
     </div>
 
-    <script src="app.js?v=11.21.18-202609192141" defer></script>
+    <script src="app.js?v=11.21.19-202609231537" defer></script>
 
 </body>
 </html>

@@ -120,6 +120,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         document.addEventListener('click', event => {
+            if (!event.target.closest('.event-image-help-details')) {
+                document.querySelectorAll('.event-image-help-details[open]').forEach(details => details.removeAttribute('open'));
+            }
             const swipedCarousel = event.target.closest('[data-event-image-carousel][data-swiped="true"]');
             if (swipedCarousel) {
                 event.preventDefault();
@@ -485,9 +488,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         // 固定記錄這一版完成修改的時間，不會因登入、重新整理或查詢資料而改變。
-        const VERSION_LABEL = 'V11.21.18';
-        const VERSION_UPDATED_AT = '2026/09/19 21:41';
-        const VERSION_UPDATED_AT_ISO = '2026-09-19T21:41:00+08:00';
+        const VERSION_LABEL = 'V11.21.19';
+        const VERSION_UPDATED_AT = '2026/09/23 15:37';
+        const VERSION_UPDATED_AT_ISO = '2026-09-23T15:37:00+08:00';
         const API_TIMEOUT_MS = 20000;
         const LOGIN_TIMEOUT_MS = 25000;
         const ADMIN_DATA_TIMEOUT_MS = 45000;
@@ -1214,7 +1217,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         function renderEventImagePlaceholder() {
             return `
                 <div class="event-image-placeholder" aria-label="此活動尚無圖片">
-                    <img src="app-icon.svg?v=11.21.18-202609192141" class="event-image-placeholder-logo" alt="" aria-hidden="true">
+                    <img src="app-icon.svg?v=11.21.19-202609231537" class="event-image-placeholder-logo" alt="" aria-hidden="true">
                     <span>尚無活動圖片</span>
                 </div>`;
         }
