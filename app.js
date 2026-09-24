@@ -488,9 +488,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         // 固定記錄這一版完成修改的時間，不會因登入、重新整理或查詢資料而改變。
-        const VERSION_LABEL = 'V11.21.19';
-        const VERSION_UPDATED_AT = '2026/09/23 15:37';
-        const VERSION_UPDATED_AT_ISO = '2026-09-23T15:37:00+08:00';
+        const VERSION_LABEL = 'V11.21.20';
+        const VERSION_UPDATED_AT = '2026/09/24 19:21';
+        const VERSION_UPDATED_AT_ISO = '2026-09-24T19:21:00+08:00';
         const API_TIMEOUT_MS = 20000;
         const LOGIN_TIMEOUT_MS = 25000;
         const ADMIN_DATA_TIMEOUT_MS = 45000;
@@ -1217,7 +1217,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         function renderEventImagePlaceholder() {
             return `
                 <div class="event-image-placeholder" aria-label="此活動尚無圖片">
-                    <img src="app-icon.svg?v=11.21.19-202609231537" class="event-image-placeholder-logo" alt="" aria-hidden="true">
+                    <img src="app-icon.svg?v=11.21.20-202609241921" class="event-image-placeholder-logo" alt="" aria-hidden="true">
                     <span>尚無活動圖片</span>
                 </div>`;
         }
@@ -1457,6 +1457,24 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             if (!session || !session.date) return null;
             const startTime = normalizeTimeRangeSeparator(session.time).split('-')[0].trim();
             return parseTaiwanDateTime(session.date, startTime || '00:00');
+        }
+        function getChronologicalSessionItems(sessions) {
+            return (Array.isArray(sessions) ? sessions : [])
+                .map((session, originalIndex) => ({ session, originalIndex, start: getSessionStartDate(session) }))
+                .sort((left, right) => {
+                    if (!left.start && !right.start) return left.originalIndex - right.originalIndex;
+                    if (!left.start) return 1;
+                    if (!right.start) return -1;
+                    return left.start - right.start || left.originalIndex - right.originalIndex;
+                });
+        }
+        function getRegistrationFirstAttendedStart(registration) {
+            const starts = (Array.isArray(registration && registration.sessionsData) ? registration.sessionsData : [])
+                .filter(session => session && session.attend === true)
+                .map(getSessionStartDate)
+                .filter(Boolean)
+                .sort((left, right) => left - right);
+            return starts[0] || null;
         }
         function isSessionExpired(session, now = new Date()) {
             const start = getSessionStartDate(session);
@@ -3253,14 +3271,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     ? `<button type="button" data-action="toggle-published" data-event-id="${escapeHTML(ev.id)}" data-published="false" class="admin-publication-toggle publication-status-published inline-flex items-center px-2 py-0.5 rounded-md text-[10px] md:text-xs font-bold whitespace-nowrap" title="取消公開此活動" aria-label="取消公開 ${escapeHTML(ev.title)}" aria-pressed="true"><i class="fa-solid fa-eye mr-1" aria-hidden="true"></i>已公開</button>`
                     : `<button type="button" data-action="toggle-published" data-event-id="${escapeHTML(ev.id)}" data-published="true" class="admin-publication-toggle publication-status-unpublished inline-flex items-center px-2 py-0.5 rounded-md text-[10px] md:text-xs font-bold whitespace-nowrap" title="公開此活動" aria-label="公開 ${escapeHTML(ev.title)}" aria-pressed="false"><i class="fa-solid fa-eye-slash mr-1" aria-hidden="true"></i>未公開</button>`;
 
-                const sortedAdminSessions = ev.sessions
-                    .map((session, originalIndex) => ({ session, originalIndex, start: getSessionStartDate(session) }))
-                    .sort((left, right) => {
-                        if (!left.start && !right.start) return left.originalIndex - right.originalIndex;
-                        if (!left.start) return 1;
-                        if (!right.start) return -1;
-                        return left.start - right.start || left.originalIndex - right.originalIndex;
-                    });
+                const sortedAdminSessions = getChronologicalSessionItems(ev.sessions);
                 const datesHTML = sortedAdminSessions.map((item, displayIndex) => {
                     const s = item.session;
                     const numHtml = ev.sessions.length > 1 ? `<span class="admin-session-number">${displayIndex + 1}.</span>` : '<span class="admin-session-number" aria-hidden="true"></span>';
@@ -4134,7 +4145,10 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     }
                 }
 
-                document.getElementById('admin-add-meals').innerHTML = ev.sessions.map((sess, idx) => {
+                const sortedAdminAddSessions = getChronologicalSessionItems(ev.sessions);
+                document.getElementById('admin-add-meals').innerHTML = sortedAdminAddSessions.map(item => {
+                    const sess = item.session;
+                    const idx = item.originalIndex;
                     let hasTimeConflict = false;
                     let conflictEvTitle = '';
 
@@ -4776,7 +4790,20 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             const titleEl = document.getElementById('part-modal-title');
             if (titleEl) titleEl.innerHTML = `<i class="fa-solid fa-users text-chihlee-blue mr-2"></i><span>${escapeHTML(ev.title)}</span>`;
 
-            const parts = state.registrations.filter(r => String(r.eventId) === state.currentAdminEventId);
+            const parts = state.registrations
+                .filter(r => String(r.eventId) === state.currentAdminEventId)
+                .map((registration, originalIndex) => ({
+                    registration,
+                    originalIndex,
+                    start: getRegistrationFirstAttendedStart(registration)
+                }))
+                .sort((left, right) => {
+                    if (!left.start && !right.start) return left.originalIndex - right.originalIndex;
+                    if (!left.start) return 1;
+                    if (!right.start) return -1;
+                    return left.start - right.start || left.originalIndex - right.originalIndex;
+                })
+                .map(item => item.registration);
             const tbody = document.getElementById('participants-tbody');
             const noMsg = document.getElementById('no-participants-msg');
             const statsContainer = document.getElementById('part-modal-stats-container');
