@@ -488,9 +488,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         // 固定記錄這一版完成修改的時間，不會因登入、重新整理或查詢資料而改變。
-        const VERSION_LABEL = 'V11.21.20';
-        const VERSION_UPDATED_AT = '2026/09/24 19:21';
-        const VERSION_UPDATED_AT_ISO = '2026-09-24T19:21:00+08:00';
+        const VERSION_LABEL = 'V11.21.21';
+        const VERSION_UPDATED_AT = '2026/09/29 22:12';
+        const VERSION_UPDATED_AT_ISO = '2026-09-29T22:12:00+08:00';
         const API_TIMEOUT_MS = 20000;
         const LOGIN_TIMEOUT_MS = 25000;
         const ADMIN_DATA_TIMEOUT_MS = 45000;
@@ -499,6 +499,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         const PUBLIC_PAGE_SIZE = 8;
         const PUBLIC_ACTIVITY_CACHE_KEY = 'chihlee_public_activity_cache_v112117';
         const PUBLIC_ACTIVITY_CACHE_TTL_MS = 5 * 60 * 1000;
+        const PUBLIC_ACTIVITY_CACHE_FALLBACK_MS = 24 * 60 * 60 * 1000;
         const ADMIN_SESSION_STORAGE_KEY = 'chihlee_admin_session_v11210';
         const MUTATION_TIMEOUT_MS = 60000;
         const STATUS_CHECK_TIMEOUT_MS = 20000;
@@ -883,7 +884,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         function restorePublicActivityCache() {
             try {
                 const cached = JSON.parse(localStorage.getItem(PUBLIC_ACTIVITY_CACHE_KEY) || 'null');
-                if (!cached || !cached.savedAt || Date.now() - Number(cached.savedAt) > PUBLIC_ACTIVITY_CACHE_TTL_MS) {
+                const cacheAge = cached && cached.savedAt ? Date.now() - Number(cached.savedAt) : Number.POSITIVE_INFINITY;
+                if (!cached || !cached.savedAt || cacheAge > PUBLIC_ACTIVITY_CACHE_FALLBACK_MS) {
                     localStorage.removeItem(PUBLIC_ACTIVITY_CACHE_KEY);
                     return false;
                 }
@@ -894,6 +896,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 renderStudentEvents();
                 clearInitialLoadError();
                 showSkeletonLoading(false);
+                if (cacheAge > PUBLIC_ACTIVITY_CACHE_TTL_MS) {
+                    showToast('先顯示最近一次活動資料，系統正在更新最新名額', 'info');
+                }
                 return true;
             } catch (error) {
                 localStorage.removeItem(PUBLIC_ACTIVITY_CACHE_KEY);
@@ -1015,10 +1020,16 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 showToast(`${state.currentUserName} 的後台登入狀態已恢復`, 'success');
                 return;
             }
-            const loaded = await fetchInitialData();
-            if (loaded) renderStudentEvents();
             loadSavedStudentInfo();
             switchView('student');
+            const restoredFromCache = restorePublicActivityCache();
+            if (restoredFromCache) {
+                // 快取先呈現，最新活動與名額在背景更新；學生不必等待 GAS 冷啟動。
+                void fetchInitialData({ preserveVisibleContent: true });
+            } else {
+                const loaded = await fetchInitialData();
+                if (loaded) renderStudentEvents();
+            }
             if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleDescriptionClamp);
         };
         window.addEventListener('pageshow', syncPageScrollLock);
@@ -1217,7 +1228,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         function renderEventImagePlaceholder() {
             return `
                 <div class="event-image-placeholder" aria-label="此活動尚無圖片">
-                    <img src="app-icon.svg?v=11.21.20-202609241921" class="event-image-placeholder-logo" alt="" aria-hidden="true">
+                    <img src="app-icon.svg?v=11.21.21-202609292212" class="event-image-placeholder-logo" alt="" aria-hidden="true">
                     <span>尚無活動圖片</span>
                 </div>`;
         }
