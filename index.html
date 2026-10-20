@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 致理．心夥伴 - 活動報名系統｜學生端載入與報名效能優化版 V11.21.21｜2026-09-29 22:12 -->
+<!-- 致理．心夥伴 - 活動報名系統｜學生報名查詢版 V11.21.22｜2026-10-20 19:24 -->
 <html lang="zh-TW" class="frame-guard-pending">
 <head>
     <meta charset="UTF-8">
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
 
-    <link rel="stylesheet" href="app-custom.css?v=11.21.21-202609292212">
+    <link rel="stylesheet" href="app-custom.css?v=11.21.22-202610201924">
 
 </head>
 <body class="text-gray-800 antialiased min-h-screen flex flex-col relative w-full">
@@ -211,11 +211,13 @@
                 <div class="admin-entry-actions">
                     <button type="button" data-action="quick-add-event" class="is-primary"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>快速新增活動</span><small>只載入表單必要資料</small></button>
                     <button type="button" data-action="load-admin-dashboard"><i class="fa-solid fa-list-check" aria-hidden="true"></i><span>管理活動與報名</span><small>需要時才載入完整清單</small></button>
+                    <button type="button" data-action="open-student-registration-lookup"><i class="fa-solid fa-user-check" aria-hidden="true"></i><span>查詢學生報名</span><small>依學號與日期區間查詢</small></button>
                 </div>
             </section>
 
             <div id="admin-tabs-bar" class="hidden flex space-x-2 md:space-x-4 mb-4 md:mb-6 border-b pb-2 overflow-x-auto no-scrollbar whitespace-nowrap">
                 <button id="tabActivityList" data-action="switch-admin-tab" data-tab="list" class="font-bold text-gray-800 border-b-2 border-chihlee-blue pb-1 px-2 transition text-sm md:text-base">活動列表</button>
+                <button id="tabStudentLookup" data-action="switch-admin-tab" data-tab="studentLookup" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">學生報名查詢</button>
                 <button id="tabActivityLog" data-action="switch-admin-tab" data-tab="log" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">動態紀錄</button>
                 <button id="tabDataQuality" data-action="switch-admin-tab" data-tab="quality" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">資料檢查</button>
             </div>
@@ -284,6 +286,48 @@
                     </table>
                 </div>
                 <div id="admin-pagination-container" class="mt-4 flex flex-col sm:flex-row justify-between items-center gap-3 hidden"></div>
+            </div>
+
+            <!-- 學生報名查詢：登入後按需查詢，不預載完整報名資料。 -->
+            <div id="adminStudentLookupSection" class="hidden w-full">
+                <div class="student-registration-lookup-panel">
+                    <div class="student-registration-lookup-heading">
+                        <div>
+                            <h2><i class="fa-solid fa-user-check" aria-hidden="true"></i>學生報名查詢</h2>
+                            <p>輸入學號並選擇日期區間，只顯示該生實際參加的活動與用餐情形。</p>
+                        </div>
+                    </div>
+                    <form id="admin-student-lookup-form" data-submit-action="admin-student-lookup" class="student-registration-lookup-form" novalidate>
+                        <label class="student-registration-lookup-field student-registration-lookup-id">
+                            <span>學生學號</span>
+                            <input id="admin-student-lookup-id" type="text" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="請輸入8碼學號" required>
+                        </label>
+                        <label class="student-registration-lookup-field">
+                            <span>查詢範圍</span>
+                            <select id="admin-student-lookup-range" data-change-action="student-lookup-range">
+                                <option value="semester">本學期</option>
+                                <option value="academicYear">本學年度</option>
+                                <option value="custom">自訂日期</option>
+                            </select>
+                        </label>
+                        <div id="admin-student-lookup-custom-range" class="student-registration-lookup-custom hidden">
+                            <label class="student-registration-lookup-field">
+                                <span>開始日期</span>
+                                <input id="admin-student-lookup-start" type="date">
+                            </label>
+                            <span class="student-registration-lookup-date-separator" aria-hidden="true">至</span>
+                            <label class="student-registration-lookup-field">
+                                <span>結束日期</span>
+                                <input id="admin-student-lookup-end" type="date">
+                            </label>
+                        </div>
+                        <button id="admin-student-lookup-submit" type="submit" class="student-registration-lookup-submit">
+                            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>查詢
+                        </button>
+                    </form>
+                    <div id="admin-student-lookup-status" class="student-registration-lookup-status" role="status" aria-live="polite">請輸入學號後查詢。</div>
+                    <div id="admin-student-lookup-result" class="hidden"></div>
+                </div>
             </div>
 
             <!-- 動態紀錄 -->
@@ -814,7 +858,7 @@
         <div id="loader-elapsed" class="loader-elapsed" aria-live="off"></div>
     </div>
 
-    <script src="app.js?v=11.21.21-202609292212" defer></script>
+    <script src="app.js?v=11.21.22-202610201924" defer></script>
 
 </body>
 </html>

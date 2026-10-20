@@ -2036,6 +2036,7 @@
         .admin-entry-actions button small { color: #64748b; font-size: .72rem; font-weight: 650; }
         .admin-entry-actions button.is-primary { color: #fff; background: var(--primary); border-color: var(--primary); }
         .admin-entry-actions button.is-primary small { color: #dbeeff; }
+        .admin-entry-actions button:nth-child(3) { grid-column: 1 / -1; min-height: 5rem; }
         .admin-loading-message { display: flex; align-items: center; gap: .8rem; padding: 1rem; color: #174d7b; background: #eef7ff; border: 1px solid #bdd8ee; border-radius: .8rem; }
         .admin-loading-message i { font-size: 1.5rem; }
         .admin-loading-message p { margin-top: .15rem; color: #60768a; font-size: .85rem; }
@@ -2045,4 +2046,133 @@
             .admin-entry-panel { grid-template-columns: 1fr; }
             .admin-entry-actions { grid-template-columns: 1fr; }
             .admin-entry-actions button { min-height: 4.75rem; }
+            .admin-entry-actions button:nth-child(3) { min-height: 4.75rem; }
+        }
+
+        /* V11.21.22：後台學生報名查詢。只在主動查詢時載入指定學生資料。 */
+        .student-registration-lookup-panel {
+            overflow: hidden;
+            background: #fff;
+            border: 1px solid #c8dced;
+            border-radius: 1rem;
+            box-shadow: 0 7px 22px rgba(16, 42, 67, .08);
+        }
+        .student-registration-lookup-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1.25rem 1.4rem;
+            background: linear-gradient(135deg, #f8fcff 0%, #eef7ff 100%);
+            border-bottom: 1px solid #d7e5f0;
+        }
+        .student-registration-lookup-heading h2 {
+            display: flex;
+            align-items: center;
+            gap: .55rem;
+            color: #07579e;
+            font-size: 1.25rem;
+            font-weight: 900;
+        }
+        .student-registration-lookup-heading p { margin-top: .3rem; color: #607287; font-size: .86rem; }
+        .student-registration-lookup-form {
+            display: flex;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            gap: .75rem;
+            padding: 1.1rem 1.4rem;
+            border-bottom: 1px solid #e4edf5;
+        }
+        .student-registration-lookup-field { display: grid; gap: .3rem; color: #334e68; font-size: .78rem; font-weight: 800; }
+        .student-registration-lookup-field input,
+        .student-registration-lookup-field select {
+            height: 2.65rem;
+            min-width: 10rem;
+            padding: .55rem .75rem;
+            color: #102a43;
+            background: #fff;
+            border: 1px solid #b9cfe0;
+            border-radius: .55rem;
+            outline: none;
+        }
+        .student-registration-lookup-field input:focus,
+        .student-registration-lookup-field select:focus { border-color: #0878d1; box-shadow: 0 0 0 3px rgba(8, 120, 209, .13); }
+        .student-registration-lookup-id input { min-width: 13rem; }
+        .student-registration-lookup-custom { display: flex; align-items: flex-end; gap: .55rem; }
+        .student-registration-lookup-custom.hidden { display: none; }
+        .student-registration-lookup-date-separator { padding-bottom: .68rem; color: #64748b; font-weight: 800; }
+        .student-registration-lookup-submit {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .45rem;
+            min-width: 6.5rem;
+            height: 2.65rem;
+            padding: 0 1.1rem;
+            color: #fff;
+            background: #075dac;
+            border-radius: .55rem;
+            font-weight: 850;
+            box-shadow: 0 3px 9px rgba(7, 93, 172, .18);
+        }
+        .student-registration-lookup-submit:disabled { opacity: .65; cursor: wait; }
+        .student-registration-lookup-status { min-height: 2.8rem; padding: .85rem 1.4rem; color: #52687c; font-size: .86rem; }
+        .student-registration-lookup-result-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: .9rem 1.4rem;
+            color: #17324d;
+            background: #f8fafc;
+            border-top: 1px solid #e6edf3;
+            border-bottom: 1px solid #dce7ef;
+        }
+        .student-registration-lookup-result-heading > div { min-width: 0; }
+        .student-registration-lookup-result-heading strong { margin-right: .65rem; color: #07579e; font-size: 1.05rem; }
+        .student-registration-lookup-result-heading > div span { color: #607287; font-size: .8rem; }
+        .student-registration-lookup-result-heading > span { flex: 0 0 auto; color: #075985; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 999px; padding: .2rem .65rem; font-size: .75rem; font-weight: 800; }
+        .student-registration-lookup-list { overflow-x: auto; padding: 0 1.4rem 1.25rem; }
+        .student-registration-lookup-row {
+            display: grid;
+            grid-template-columns: 15.5rem minmax(18rem, 1fr) 5rem;
+            align-items: center;
+            gap: 1rem;
+            min-width: 47rem;
+            min-height: 3.35rem;
+            padding: .65rem .8rem;
+            color: #17324d;
+            border-bottom: 1px solid #e6edf3;
+        }
+        .student-registration-lookup-row:last-child { border-bottom: 0; }
+        .student-registration-lookup-date { font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .student-registration-lookup-title { min-width: 0; overflow: hidden; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+        .student-registration-lookup-row.is-ended .student-registration-lookup-date,
+        .student-registration-lookup-row.is-ended .student-registration-lookup-title { color: #9aa5b1; text-decoration: line-through; text-decoration-thickness: 1.5px; }
+        .student-registration-lookup-row.is-ended .meal-badge { opacity: .58; filter: grayscale(.6); }
+        .student-registration-lookup-series { min-width: 47rem; margin-top: .8rem; border: 1px solid #cfe0ed; border-radius: .7rem; overflow: hidden; }
+        .student-registration-lookup-series-title { display: flex; align-items: center; gap: .65rem; padding: .65rem .8rem; color: #07579e; background: #eef7ff; font-weight: 900; }
+        .student-registration-lookup-series-title span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .student-registration-lookup-series-title small { flex: 0 0 auto; padding: .12rem .45rem; color: #075985; background: #fff; border: 1px solid #9fcfea; border-radius: 999px; font-size: .68rem; }
+        .student-registration-lookup-series.is-ended .student-registration-lookup-series-title span { color: #9aa5b1; text-decoration: line-through; }
+        .student-registration-lookup-empty { display: grid; place-items: center; gap: .4rem; padding: 2.5rem 1rem 3rem; color: #7b8794; text-align: center; }
+        .student-registration-lookup-empty i { font-size: 2rem; color: #9fb3c8; }
+        .student-registration-lookup-empty span { font-size: .8rem; }
+
+        @media (max-width: 700px) {
+            .student-registration-lookup-heading,
+            .student-registration-lookup-form,
+            .student-registration-lookup-status,
+            .student-registration-lookup-result-heading { padding-left: 1rem; padding-right: 1rem; }
+            .student-registration-lookup-form { align-items: stretch; }
+            .student-registration-lookup-field,
+            .student-registration-lookup-field input,
+            .student-registration-lookup-field select,
+            .student-registration-lookup-submit { width: 100%; min-width: 0; }
+            .student-registration-lookup-custom { width: 100%; align-items: flex-end; }
+            .student-registration-lookup-custom .student-registration-lookup-field { flex: 1 1 0; min-width: 0; }
+            .student-registration-lookup-result-heading { align-items: flex-start; }
+            .student-registration-lookup-result-heading strong,
+            .student-registration-lookup-result-heading > div span { display: block; margin: 0; }
+            .student-registration-lookup-list { padding-left: 1rem; padding-right: 1rem; }
         }

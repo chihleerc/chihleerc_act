@@ -9,7 +9,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             studentIdentity: null, registeredEventIds: [], pendingRegistrationIds: {},
             eventCounts: new Map(), calendarYear: null, calendarMonth: null, calendarSelectedDate: '',
             publicPage: 0, publicHasMore: false, publicTotal: 0, publicCategoryCounts: {}, publicLoadingMore: false,
-            adminDataLoaded: false, adminLogsLoaded: false, calendarFullDataLoaded: false,
+            adminDataLoaded: false, adminLogsLoaded: false, calendarFullDataLoaded: false, adminStudentLookupInitialized: false,
             adminPagination: { page: 1, pageSize: 5, total: 0, totalPages: 1, scope: 'upcoming' },
             adminFilterOptions: { years: [], teachers: [] },
             adminPageEvents: [], adminPageEventStats: {}, publicEventsSnapshot: [], publicEventStatsSnapshot: {},
@@ -165,6 +165,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 'load-more-public-events': () => loadMorePublicActivities(),
                 'open-register': () => openRegisterModal(),
                 'switch-admin-tab': () => switchAdminTab(target.dataset.tab),
+                'open-student-registration-lookup': () => openAdminStudentLookup(),
                 'quick-add-event': () => quickAddEvent(),
                 'load-admin-dashboard': () => loadAdminDashboard(),
                 'reload-data': () => loadAdminDashboard(state.adminCurrentPage || 1, true),
@@ -212,6 +213,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             if (action === 'login') handleLogin(event);
             else if (action === 'registration') submitRegistration(event);
             else if (action === 'event-edit') submitEventEdit(event);
+            else if (action === 'admin-student-lookup') executeAdminStudentLookup(event);
         });
 
         let adminFilterTimer = null;
@@ -249,6 +251,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 state.archivePreview = null;
                 renderArchivePreview(null);
             }
+            else if (action === 'student-lookup-range') updateAdminStudentLookupRange(target.value);
         });
 
         document.addEventListener('blur', event => {
@@ -488,9 +491,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         // 固定記錄這一版完成修改的時間，不會因登入、重新整理或查詢資料而改變。
-        const VERSION_LABEL = 'V11.21.21';
-        const VERSION_UPDATED_AT = '2026/09/29 22:12';
-        const VERSION_UPDATED_AT_ISO = '2026-09-29T22:12:00+08:00';
+        const VERSION_LABEL = 'V11.21.22';
+        const VERSION_UPDATED_AT = '2026/10/20 19:24';
+        const VERSION_UPDATED_AT_ISO = '2026-10-20T19:24:00+08:00';
         const API_TIMEOUT_MS = 20000;
         const LOGIN_TIMEOUT_MS = 25000;
         const ADMIN_DATA_TIMEOUT_MS = 45000;
@@ -585,6 +588,19 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             if (action === 'lookupStudentForAdminRegistration' && (
                 !isPlainObject(data) || typeof data.id !== 'string' || typeof data.name !== 'string'
             )) throw new Error('學生資料格式不正確');
+            if (action === 'getAdminStudentRegistrations' && (
+                !isPlainObject(data) || !isPlainObject(data.student) || !isPlainObject(data.range) ||
+                typeof data.student.id !== 'string' || typeof data.student.name !== 'string' ||
+                !Array.isArray(data.activities) || data.activities.some(activity =>
+                    !isPlainObject(activity) || typeof activity.title !== 'string' ||
+                    typeof activity.isSeries !== 'boolean' || !Array.isArray(activity.sessions) ||
+                    activity.sessions.some(session =>
+                        !isPlainObject(session) || typeof session.date !== 'string' ||
+                        typeof session.time !== 'string' || typeof session.meal !== 'string' ||
+                        typeof session.isEnded !== 'boolean'
+                    )
+                )
+            )) throw new Error('學生報名查詢結果格式不正確');
             if (action === 'sendLineNotification' && (
                 typeof response.successCount !== 'number' || typeof response.failCount !== 'number' || !Array.isArray(response.failedStudents) ||
                 !isPlainObject(response.lineUsage)
@@ -1858,6 +1874,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     if (state.adminDataLoaded) { switchAdminTab('list'); renderTeacherDashboard(); }
                     else {
                         document.getElementById('adminActivitySection').classList.add('hidden');
+                        document.getElementById('adminStudentLookupSection').classList.add('hidden');
                         document.getElementById('adminLogSection').classList.add('hidden');
                         document.getElementById('adminDataQualitySection').classList.add('hidden');
                     }
@@ -2119,8 +2136,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             }
             state.adminCreds = null; state.isTeacherLoggedIn = false; state.currentUserRole = null; state.currentUserName = null;
             sessionStorage.removeItem(ADMIN_SESSION_STORAGE_KEY);
-            state.adminDataLoaded = false; state.adminLogsLoaded = false;
+            state.adminDataLoaded = false; state.adminLogsLoaded = false; state.adminStudentLookupInitialized = false;
             state.adminPageEvents = []; state.adminPageEventStats = {}; state.publicEventsSnapshot = []; state.publicEventStatsSnapshot = {};
+            resetAdminStudentLookup();
             invalidateCalendarData();
             state.events = []; state.eventStats = {}; state.counselors = []; state.counselorsLoaded = false; state.registrations = []; state.logs = []; state.admins = [];
             showToast('已安全登出', 'info'); switchView('student');
@@ -3032,7 +3050,14 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         function switchAdminTab(tab) {
+            if (tab === 'list' && !state.adminDataLoaded) {
+                void loadAdminDashboard();
+                return;
+            }
+            const entryPanel = document.getElementById('admin-entry-panel');
+            if (entryPanel) entryPanel.classList.add('hidden');
             document.getElementById('adminActivitySection').classList.toggle('hidden', tab !== 'list');
+            document.getElementById('adminStudentLookupSection').classList.toggle('hidden', tab !== 'studentLookup');
             document.getElementById('adminLogSection').classList.toggle('hidden', tab !== 'log');
             document.getElementById('adminDataQualitySection').classList.toggle('hidden', tab !== 'quality');
 
@@ -3040,8 +3065,10 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             const defaultTabClass = 'text-gray-500 hover:text-gray-800 pb-1 px-2 transition whitespace-nowrap text-sm md:text-base';
 
             document.getElementById('tabActivityList').className = tab === 'list' ? activeTabClass : defaultTabClass;
+            document.getElementById('tabStudentLookup').className = tab === 'studentLookup' ? activeTabClass : defaultTabClass;
             document.getElementById('tabActivityLog').className = tab === 'log' ? activeTabClass : defaultTabClass;
             document.getElementById('tabDataQuality').className = tab === 'quality' ? activeTabClass : defaultTabClass;
+            if (tab === 'studentLookup') initializeAdminStudentLookup();
             if (tab === 'log') {
                 renderLogs();
                 if (!state.adminLogsLoaded) void loadAdminLogs();
@@ -3049,6 +3076,173 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             if (tab === 'quality') {
                 initializeArchivePanel();
                 if (state.dataQualityReport) renderDataQualityReport(state.dataQualityReport);
+            }
+        }
+
+        function openAdminStudentLookup() {
+            if (!state.adminCreds) return switchView('teacherLogin');
+            const tabs = document.getElementById('admin-tabs-bar');
+            if (tabs) tabs.classList.remove('hidden');
+            switchAdminTab('studentLookup');
+            const input = document.getElementById('admin-student-lookup-id');
+            if (input) input.focus();
+        }
+
+        function getTaipeiCalendarParts(date = new Date()) {
+            const parts = Object.fromEntries(new Intl.DateTimeFormat('en', {
+                timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit'
+            }).formatToParts(date).filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
+            return { year: Number(parts.year), month: Number(parts.month), day: Number(parts.day) };
+        }
+
+        function getAdminStudentLookupPresetRange(preset) {
+            const { year, month } = getTaipeiCalendarParts();
+            if (preset === 'academicYear') {
+                return month >= 8
+                    ? { startDate: `${year}-08-01`, endDate: `${year + 1}-07-31` }
+                    : { startDate: `${year - 1}-08-01`, endDate: `${year}-07-31` };
+            }
+            if (month === 1) return { startDate: `${year - 1}-08-01`, endDate: `${year}-01-31` };
+            if (month >= 8) return { startDate: `${year}-08-01`, endDate: `${year + 1}-01-31` };
+            return { startDate: `${year}-02-01`, endDate: `${year}-07-31` };
+        }
+
+        function initializeAdminStudentLookup() {
+            if (state.adminStudentLookupInitialized) return;
+            state.adminStudentLookupInitialized = true;
+            const rangeSelect = document.getElementById('admin-student-lookup-range');
+            if (rangeSelect) rangeSelect.value = 'semester';
+            updateAdminStudentLookupRange('semester');
+        }
+
+        function updateAdminStudentLookupRange(preset) {
+            const customRange = document.getElementById('admin-student-lookup-custom-range');
+            const startInput = document.getElementById('admin-student-lookup-start');
+            const endInput = document.getElementById('admin-student-lookup-end');
+            if (!customRange || !startInput || !endInput) return;
+            customRange.classList.toggle('hidden', preset !== 'custom');
+            if (preset !== 'custom') {
+                const range = getAdminStudentLookupPresetRange(preset);
+                startInput.value = range.startDate;
+                endInput.value = range.endDate;
+            } else if (!startInput.value || !endInput.value) {
+                const range = getAdminStudentLookupPresetRange('semester');
+                startInput.value = range.startDate;
+                endInput.value = range.endDate;
+            }
+        }
+
+        function resetAdminStudentLookup() {
+            const form = document.getElementById('admin-student-lookup-form');
+            if (form) form.reset();
+            const result = document.getElementById('admin-student-lookup-result');
+            if (result) {
+                result.innerHTML = '';
+                result.classList.add('hidden');
+            }
+            const status = document.getElementById('admin-student-lookup-status');
+            if (status) status.textContent = '請輸入學號後查詢。';
+        }
+
+        function renderAdminStudentLookupSession(session, title, options = {}) {
+            const endedClass = session.isEnded ? ' is-ended' : '';
+            const titleText = options.seriesSessionLabel || title;
+            return `<div class="student-registration-lookup-row${endedClass}">
+                <span class="student-registration-lookup-date">${escapeHTML(formatSessionDate(session.date))} ${escapeHTML(getDayOfWeek(session.date))}　${escapeHTML(formatSessionTime(session.time))}</span>
+                <span class="student-registration-lookup-title" title="${escapeHTML(title)}">${escapeHTML(titleText)}</span>
+                <span class="${getMealBadgeClass(session.meal)}">${escapeHTML(normalizeMealChoice(session.meal))}</span>
+            </div>`;
+        }
+
+        function renderAdminStudentLookupResult(data) {
+            const result = document.getElementById('admin-student-lookup-result');
+            const status = document.getElementById('admin-student-lookup-status');
+            if (!result || !status) return;
+            const activities = Array.isArray(data.activities) ? data.activities : [];
+            const sessionCount = activities.reduce((total, activity) => total + activity.sessions.length, 0);
+            const student = data.student || {};
+            const range = data.range || {};
+            const studentMeta = [student.eduSystem, student.className].filter(Boolean).join('｜');
+            const heading = `<div class="student-registration-lookup-result-heading">
+                <div><strong>${escapeHTML(student.name || '未命名學生')}</strong><span>${escapeHTML(student.id || '')}${studentMeta ? `｜${escapeHTML(studentMeta)}` : ''}</span></div>
+                <span>共 ${sessionCount} 場</span>
+            </div>`;
+            const rangeLabel = `${formatSessionDate(range.startDate)}－${formatSessionDate(range.endDate)}`;
+            if (!activities.length) {
+                result.innerHTML = `${heading}<div class="student-registration-lookup-empty"><i class="fa-regular fa-calendar-xmark" aria-hidden="true"></i><strong>此區間沒有報名活動</strong><span>${escapeHTML(rangeLabel)}</span></div>`;
+                result.classList.remove('hidden');
+                status.textContent = `查詢完成：${student.name || student.id}於指定區間沒有報名活動。`;
+                return;
+            }
+            const listHtml = activities.map(activity => {
+                if (activity.isSeries) {
+                    const allEnded = activity.sessions.every(session => session.isEnded);
+                    const rows = activity.sessions.map((session, index) =>
+                        renderAdminStudentLookupSession(session, activity.title, { seriesSessionLabel: `第 ${index + 1} 場` })
+                    ).join('');
+                    return `<section class="student-registration-lookup-series${allEnded ? ' is-ended' : ''}">
+                        <div class="student-registration-lookup-series-title"><span>${escapeHTML(activity.title)}</span><small>系列活動</small></div>
+                        ${rows}
+                    </section>`;
+                }
+                return activity.sessions.map(session => renderAdminStudentLookupSession(session, activity.title)).join('');
+            }).join('');
+            result.innerHTML = `${heading}<div class="student-registration-lookup-list" aria-label="學生報名活動">${listHtml}</div>`;
+            result.classList.remove('hidden');
+            status.textContent = `查詢完成：${student.name || student.id}共有 ${sessionCount} 場活動。`;
+        }
+
+        async function executeAdminStudentLookup(event) {
+            if (event && event.preventDefault) event.preventDefault();
+            if (!state.adminCreds) return switchView('teacherLogin');
+            const idInput = document.getElementById('admin-student-lookup-id');
+            const startInput = document.getElementById('admin-student-lookup-start');
+            const endInput = document.getElementById('admin-student-lookup-end');
+            const submitButton = document.getElementById('admin-student-lookup-submit');
+            const status = document.getElementById('admin-student-lookup-status');
+            const result = document.getElementById('admin-student-lookup-result');
+            const sid = normalizeStudentIdInput(idInput && idInput.value);
+            if (idInput) idInput.value = sid;
+            if (!/^\d{8}$/.test(sid)) {
+                if (status) status.textContent = '請輸入正確的8碼學號。';
+                if (idInput) idInput.focus();
+                return;
+            }
+            const startDate = startInput ? startInput.value : '';
+            const endDate = endInput ? endInput.value : '';
+            if (!startDate || !endDate || startDate > endDate) {
+                if (status) status.textContent = '請確認開始日期與結束日期。';
+                return;
+            }
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>查詢中';
+            }
+            if (status) status.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> 正在讀取學生報名資料，請稍候…';
+            if (result) result.classList.add('hidden');
+            try {
+                const response = await apiRequest({
+                    action: 'getAdminStudentRegistrations',
+                    sid,
+                    startDate,
+                    endDate,
+                    adminAcc: state.adminCreds.acc,
+                    adminToken: state.adminCreds.token
+                }, 25000);
+                if (checkTokenExpiration(response)) return;
+                if (!response.success) throw Object.assign(new Error(response.error || '查詢失敗'), { code: response.code });
+                renderAdminStudentLookupResult(response.data);
+            } catch (error) {
+                if (result) {
+                    result.innerHTML = '';
+                    result.classList.add('hidden');
+                }
+                if (status) status.textContent = getRequestErrorMessage(error, '學生報名資料暫時無法讀取');
+            } finally {
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = '<i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>查詢';
+                }
             }
         }
 
