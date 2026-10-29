@@ -2178,7 +2178,7 @@
             .student-registration-lookup-list { padding-left: 1rem; padding-right: 1rem; }
         }
 
-        /* V11.21.23｜後台學期報名概況 */
+        /* V11.21.24｜後台學期報名概況 */
         .semester-overview-panel {
             overflow: hidden;
             background: #fff;
@@ -2227,6 +2227,18 @@
         .semester-overview-custom { display: flex; align-items: flex-end; gap: .5rem; }
         .semester-overview-custom.hidden { display: none; }
         .semester-overview-date-separator { padding-bottom: .68rem; color: #64748b; font-weight: 800; }
+        .semester-overview-checkbox {
+            display: inline-flex;
+            align-items: center;
+            gap: .45rem;
+            min-height: 2.65rem;
+            padding: 0 .2rem;
+            color: #334e68;
+            font-size: .8rem;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+        .semester-overview-checkbox input { width: 1.05rem; height: 1.05rem; accent-color: #075dac; }
         .semester-overview-submit {
             display: inline-flex;
             align-items: center;
@@ -2268,18 +2280,28 @@
         .semester-overview-summary .is-rate { background: #fff9e8; border-color: #edd998; }
         .semester-overview-summary .is-rate strong { color: #956700; }
         .semester-overview-table-wrap { overflow-x: auto; border-top: 1px solid #e4edf5; }
-        .semester-overview-table { width: 100%; min-width: 58rem; text-align: left; border-collapse: collapse; }
+        .semester-overview-table { width: 100%; min-width: 64rem; text-align: left; border-collapse: collapse; }
         .semester-overview-table thead { color: #334e68; background: #eaf1f6; }
         .semester-overview-table th { padding: .85rem 1rem; font-size: .82rem; font-weight: 850; }
         .semester-overview-table th:nth-child(1) { width: 16rem; }
-        .semester-overview-table th:nth-child(2) { width: 10rem; }
+        .semester-overview-table th:nth-child(2) { width: 19rem; }
         .semester-overview-table td { padding: .85rem 1rem; vertical-align: top; border-top: 1px solid #e5edf3; }
         .semester-overview-student strong { display: block; color: #07579e; font-size: .98rem; }
-        .semester-overview-student span,
-        .semester-overview-student small { display: block; margin-top: .15rem; color: #607287; font-size: .75rem; }
-        .semester-overview-status { display: inline-flex; padding: .3rem .6rem; border-radius: 999px; font-size: .75rem; font-weight: 850; white-space: nowrap; }
-        .semester-overview-status.is-registered { color: #087a49; background: #e9f9f1; border: 1px solid #9ed9bb; }
-        .semester-overview-status.is-unregistered { color: #aa332c; background: #fff0ef; border: 1px solid #efb8b4; }
+        .semester-overview-student span { display: block; margin-top: .15rem; color: #607287; font-size: .75rem; }
+        .semester-overview-participation { display: grid; gap: .32rem; font-size: .78rem; }
+        .semester-overview-participation > strong { font-size: .82rem; font-weight: 850; }
+        .semester-overview-participation > strong.is-registered { color: #087a49; }
+        .semester-overview-participation > strong.is-unregistered { color: #aa332c; }
+        .semester-overview-category-counts { display: flex; align-items: center; flex-wrap: wrap; color: #334e68; white-space: nowrap; }
+        .semester-overview-category-counts b { margin-right: .08rem; font-weight: 900; }
+        .semester-overview-category-counts i { margin: 0; color: #94a3b8; font-style: normal; }
+        .semester-overview-category.is-interpersonal,
+        .semester-overview-category-counts .is-interpersonal { color: #087a49; }
+        .semester-overview-category.is-academic,
+        .semester-overview-category-counts .is-academic { color: #be185d; }
+        .semester-overview-category.is-career,
+        .semester-overview-category-counts .is-career { color: #946200; }
+        .semester-overview-category.is-other { color: #64748b; }
         .semester-overview-activities { min-width: 28rem; }
         .semester-overview-session {
             display: grid;
@@ -2291,10 +2313,12 @@
             font-size: .8rem;
         }
         .semester-overview-session-date { font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .semester-overview-session-name { display: flex; align-items: baseline; gap: .55rem; min-width: 0; }
+        .semester-overview-category { flex: 0 0 auto; font-weight: 900; }
         .semester-overview-session-title { min-width: 0; overflow: hidden; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
-        .semester-overview-session-title small { margin-left: .35rem; padding: .08rem .35rem; color: #6b3fa0; background: #f3eefe; border-radius: 999px; font-size: .62rem; }
         .semester-overview-session.is-ended .semester-overview-session-date,
-        .semester-overview-session.is-ended .semester-overview-session-title { color: #9aa5b1; }
+        .semester-overview-session.is-ended .semester-overview-session-title,
+        .semester-overview-session.is-ended .semester-overview-category { color: #9aa5b1; }
         .semester-overview-none { display: flex; align-items: center; gap: .45rem; color: #9b423c; font-size: .82rem; font-weight: 800; }
         .semester-overview-more { margin-top: .2rem; color: #52687c; }
         .semester-overview-more summary { cursor: pointer; color: #075dac; font-size: .76rem; font-weight: 850; }
@@ -2329,6 +2353,7 @@
             .semester-overview-submit { width: 100%; }
             .semester-overview-custom { width: 100%; align-items: flex-end; }
             .semester-overview-custom .semester-overview-field { flex: 1 1 0; min-width: 0; }
+            .semester-overview-checkbox { width: 100%; }
             .semester-overview-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); padding-left: 1rem; padding-right: 1rem; }
             .semester-overview-summary > div { display: grid; grid-template-columns: 1fr auto; gap: .1rem .25rem; }
             .semester-overview-summary span { grid-column: 1 / -1; margin: 0; }

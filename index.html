@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 致理．心夥伴 - 活動報名系統｜學期報名概況版 V11.21.23｜2026-10-29 -->
+<!-- 致理．心夥伴 - 活動報名系統｜學期活動參與概況版 V11.21.24｜2026-10-29 -->
 <html lang="zh-TW" class="frame-guard-pending">
 <head>
     <meta charset="UTF-8">
@@ -372,6 +372,10 @@
                                 <option value="unregistered">完全未報名</option>
                             </select>
                         </label>
+                        <label class="semester-overview-checkbox">
+                            <input id="admin-semester-overview-exclude-one-on-one" type="checkbox" checked>
+                            <span>排除一對一諮詢</span>
+                        </label>
                         <label class="semester-overview-field semester-overview-search">
                             <span>搜尋學生</span>
                             <input id="admin-semester-overview-search" type="search" maxlength="50" autocomplete="off" placeholder="姓名、學號或班級">
@@ -382,7 +386,7 @@
                     <div id="admin-semester-overview-summary" class="semester-overview-summary hidden"></div>
                     <div class="semester-overview-table-wrap custom-scroll">
                         <table class="semester-overview-table">
-                            <thead><tr><th>學生／個管</th><th>狀態</th><th>報名活動與場次</th></tr></thead>
+                            <thead><tr><th>學生</th><th>參與概況</th><th>活動與場次</th></tr></thead>
                             <tbody id="admin-semester-overview-tbody"><tr><td colspan="3" class="semester-overview-empty">尚未查詢</td></tr></tbody>
                         </table>
                     </div>

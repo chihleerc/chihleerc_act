@@ -496,9 +496,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         // 固定記錄這一版完成修改的時間，不會因登入、重新整理或查詢資料而改變。
-        const VERSION_LABEL = 'V11.21.23';
-        const VERSION_UPDATED_AT = '2026/10/20 19:24';
-        const VERSION_UPDATED_AT_ISO = '2026-10-20T19:24:00+08:00';
+        const VERSION_LABEL = 'V11.21.24';
+        const VERSION_UPDATED_AT = '2026/10/29 20:00';
+        const VERSION_UPDATED_AT_ISO = '2026-10-29T20:00:00+08:00';
         const API_TIMEOUT_MS = 20000;
         const LOGIN_TIMEOUT_MS = 25000;
         const ADMIN_DATA_TIMEOUT_MS = 45000;
@@ -610,14 +610,16 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 !isPlainObject(data) || !isPlainObject(data.range) || !isPlainObject(data.filters) ||
                 !isPlainObject(data.summary) || !isPlainObject(data.pagination) ||
                 !Array.isArray(data.filters.counselors) || !Array.isArray(data.students) ||
-                data.pagination.pageSize !== 20 || data.students.some(student =>
+                data.pagination.pageSize !== 30 || typeof data.filters.excludeOneOnOne !== 'boolean' ||
+                data.students.some(student =>
                     !isPlainObject(student) || typeof student.id !== 'string' ||
-                    typeof student.name !== 'string' || typeof student.counselor !== 'string' ||
-                    typeof student.hasRegistration !== 'boolean' || !Array.isArray(student.sessions) ||
+                    typeof student.name !== 'string' ||
+                    typeof student.hasRegistration !== 'boolean' || !isPlainObject(student.categoryCounts) ||
+                    !Array.isArray(student.sessions) ||
                     student.sessions.some(session =>
                         !isPlainObject(session) || typeof session.title !== 'string' ||
                         typeof session.date !== 'string' || typeof session.time !== 'string' ||
-                        typeof session.isEnded !== 'boolean'
+                        typeof session.category !== 'string' || typeof session.isEnded !== 'boolean'
                     )
                 )
             )) throw new Error('學期報名概況格式不正確');
@@ -3296,6 +3298,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             const rangeSelect = document.getElementById('admin-semester-overview-range');
             if (rangeSelect) rangeSelect.value = (month >= 8 || month === 1) ? 'first' : 'second';
             updateAdminSemesterOverviewRange();
+            const excludeOneOnOne = document.getElementById('admin-semester-overview-exclude-one-on-one');
+            if (excludeOneOnOne) excludeOneOnOne.checked = true;
             const counselorSelect = document.getElementById('admin-semester-overview-counselor');
             if (counselorSelect && state.currentUserRole === 'staff') {
                 counselorSelect.innerHTML = `<option value="${escapeHTML(state.currentUserName || '')}">${escapeHTML(state.currentUserName || '目前帳號')}</option>`;
@@ -3341,13 +3345,36 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             ).join('');
         }
 
+        function getSemesterOverviewCategoryClass(category) {
+            if (category === '人際') return 'is-interpersonal';
+            if (category === '課業') return 'is-academic';
+            if (category === '職涯') return 'is-career';
+            return 'is-other';
+        }
+
         function renderSemesterOverviewSession(session) {
             const endedClass = session.isEnded ? ' is-ended' : '';
-            const seriesTag = session.isSeries ? '<small>系列</small>' : '';
+            const category = String(session.category || '未分類');
             return `<div class="semester-overview-session${endedClass}">
                 <span class="semester-overview-session-date">${escapeHTML(formatSessionDate(session.date))} ${escapeHTML(getDayOfWeek(session.date))}　${escapeHTML(formatSessionTime(session.time))}</span>
-                <span class="semester-overview-session-title" title="${escapeHTML(session.title)}">${escapeHTML(session.title)}${seriesTag}</span>
+                <span class="semester-overview-session-name"><span class="semester-overview-category ${getSemesterOverviewCategoryClass(category)}">${escapeHTML(category)}</span><span class="semester-overview-session-title" title="${escapeHTML(session.title)}">${escapeHTML(session.title)}</span></span>
             </div>`;
+        }
+
+        function renderSemesterOverviewCategoryCounts(categoryCounts) {
+            const counts = categoryCounts && typeof categoryCounts === 'object' ? categoryCounts : {};
+            return `<span class="semester-overview-category-counts"><span><b class="is-interpersonal">人際</b>${Number(counts['人際']) || 0}場</span><i>｜</i><span><b class="is-academic">課業</b>${Number(counts['課業']) || 0}場</span><i>｜</i><span><b class="is-career">職涯</b>${Number(counts['職涯']) || 0}場</span></span>`;
+        }
+
+        function getSemesterOverviewPeriodLabel() {
+            const yearSelect = document.getElementById('admin-semester-overview-year');
+            const rangeSelect = document.getElementById('admin-semester-overview-range');
+            const yearLabel = yearSelect && yearSelect.selectedOptions[0] ? yearSelect.selectedOptions[0].textContent : '';
+            const rangeValue = rangeSelect ? rangeSelect.value : '';
+            if (rangeValue === 'first') return `${yearLabel}第1學期`;
+            if (rangeValue === 'second') return `${yearLabel}第2學期`;
+            if (rangeValue === 'academicYear') return yearLabel;
+            return '自訂日期';
         }
 
         function renderAdminSemesterOverview(data) {
@@ -3363,16 +3390,16 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             populateSemesterOverviewCounselors(data.filters || {});
             summaryEl.innerHTML = `
                 <div><span>負責學生</span><strong>${Number(summary.totalStudents) || 0}</strong><small>人</small></div>
-                <div class="is-registered"><span>已有報名</span><strong>${Number(summary.registeredStudents) || 0}</strong><small>人</small></div>
-                <div class="is-unregistered"><span>完全未報名</span><strong>${Number(summary.unregisteredStudents) || 0}</strong><small>人</small></div>
-                <div class="is-rate"><span>本期報名率</span><strong>${Number(summary.registrationRate) || 0}</strong><small>%</small></div>`;
+                <div class="is-registered"><span>有參加活動</span><strong>${Number(summary.registeredStudents) || 0}</strong><small>人</small></div>
+                <div class="is-unregistered"><span>未參加活動</span><strong>${Number(summary.unregisteredStudents) || 0}</strong><small>人</small></div>
+                <div class="is-rate"><span>活動參與率</span><strong>${Number(summary.registrationRate) || 0}</strong><small>%</small></div>`;
             summaryEl.classList.remove('hidden');
 
             if (!students.length) {
                 tbody.innerHTML = '<tr><td colspan="3" class="semester-overview-empty"><i class="fa-regular fa-folder-open" aria-hidden="true"></i>目前條件下沒有學生資料</td></tr>';
             } else {
                 tbody.innerHTML = students.map(student => {
-                    const meta = [student.eduSystem, student.className, student.id].filter(Boolean).join('｜');
+                    const meta = [student.id, student.className].filter(Boolean).join('｜');
                     const sessions = Array.isArray(student.sessions) ? student.sessions : [];
                     const visibleSessions = sessions.slice(0, 3).map(renderSemesterOverviewSession).join('');
                     const moreSessions = sessions.length > 3
@@ -3381,11 +3408,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     const activityHtml = student.hasRegistration
                         ? `${visibleSessions}${moreSessions}`
                         : '<div class="semester-overview-none"><i class="fa-regular fa-calendar-xmark" aria-hidden="true"></i>本區間完全未報名</div>';
-                    const statusHtml = student.hasRegistration
-                        ? `<span class="semester-overview-status is-registered">已報名 ${Number(student.activityCount) || 0} 項／${Number(student.sessionCount) || 0} 場</span>`
-                        : '<span class="semester-overview-status is-unregistered">未報名</span>';
+                    const statusHtml = `<div class="semester-overview-participation"><strong class="${student.hasRegistration ? 'is-registered' : 'is-unregistered'}">${student.hasRegistration ? `參加 ${Number(student.activityCount) || 0} 項／${Number(student.sessionCount) || 0} 場` : '未報名'}</strong>${renderSemesterOverviewCategoryCounts(student.categoryCounts)}</div>`;
                     return `<tr>
-                        <td class="semester-overview-student"><strong>${escapeHTML(student.name)}</strong><span>${escapeHTML(meta)}</span><small>${escapeHTML(student.counselor)}</small></td>
+                        <td class="semester-overview-student"><strong>${escapeHTML(student.name)}</strong><span>${escapeHTML(meta)}</span></td>
                         <td>${statusHtml}</td>
                         <td class="semester-overview-activities">${activityHtml}</td>
                     </tr>`;
@@ -3401,7 +3426,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             </div>`;
             paginationEl.classList.toggle('hidden', Number(pagination.total) === 0);
             const range = data.range || {};
-            statusEl.textContent = `查詢完成：${formatSessionDate(range.startDate)}－${formatSessionDate(range.endDate)}，共 ${Number(summary.totalStudents) || 0} 位學生。`;
+            const counselorLabel = data.filters && data.filters.counselor ? data.filters.counselor : '全部個管老師';
+            statusEl.textContent = `查詢完成：${counselorLabel}｜${getSemesterOverviewPeriodLabel()}｜${formatSessionDate(range.startDate)}－${formatSessionDate(range.endDate)}，共 ${Number(pagination.total) || 0} 位學生。`;
         }
 
         async function executeAdminSemesterOverview(event, page = 1) {
@@ -3411,6 +3437,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             const endInput = document.getElementById('admin-semester-overview-end');
             const counselorSelect = document.getElementById('admin-semester-overview-counselor');
             const statusSelect = document.getElementById('admin-semester-overview-filter');
+            const excludeOneOnOne = document.getElementById('admin-semester-overview-exclude-one-on-one');
             const searchInput = document.getElementById('admin-semester-overview-search');
             const submitButton = document.getElementById('admin-semester-overview-submit');
             const statusEl = document.getElementById('admin-semester-overview-status');
@@ -3435,6 +3462,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     endDate,
                     counselor: state.currentUserRole === 'staff' ? state.currentUserName : (counselorSelect ? counselorSelect.value : ''),
                     status: statusSelect ? statusSelect.value : 'all',
+                    excludeOneOnOne: excludeOneOnOne ? excludeOneOnOne.checked : true,
                     search: searchInput ? searchInput.value.trim() : '',
                     page: state.adminSemesterOverviewPage,
                     adminAcc: state.adminCreds.acc,
