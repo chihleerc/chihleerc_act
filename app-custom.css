@@ -2036,7 +2036,8 @@
         .admin-entry-actions button small { color: #64748b; font-size: .72rem; font-weight: 650; }
         .admin-entry-actions button.is-primary { color: #fff; background: var(--primary); border-color: var(--primary); }
         .admin-entry-actions button.is-primary small { color: #dbeeff; }
-        .admin-entry-actions button:nth-child(3) { grid-column: 1 / -1; min-height: 5rem; }
+        .admin-entry-actions button:nth-child(3),
+        .admin-entry-actions button:nth-child(4) { min-height: 5rem; }
         .admin-loading-message { display: flex; align-items: center; gap: .8rem; padding: 1rem; color: #174d7b; background: #eef7ff; border: 1px solid #bdd8ee; border-radius: .8rem; }
         .admin-loading-message i { font-size: 1.5rem; }
         .admin-loading-message p { margin-top: .15rem; color: #60768a; font-size: .85rem; }
@@ -2175,4 +2176,161 @@
             .student-registration-lookup-result-heading strong,
             .student-registration-lookup-result-heading > div span { display: block; margin: 0; }
             .student-registration-lookup-list { padding-left: 1rem; padding-right: 1rem; }
+        }
+
+        /* V11.21.23｜後台學期報名概況 */
+        .semester-overview-panel {
+            overflow: hidden;
+            background: #fff;
+            border: 1px solid #cbddea;
+            border-radius: 1rem;
+            box-shadow: 0 7px 22px rgba(16, 42, 67, .08);
+        }
+        .semester-overview-heading {
+            padding: 1.25rem 1.4rem;
+            background: linear-gradient(135deg, #f8fcff 0%, #eef7ff 100%);
+            border-bottom: 1px solid #d7e5f0;
+        }
+        .semester-overview-heading h2 {
+            display: flex;
+            align-items: center;
+            gap: .55rem;
+            color: #07579e;
+            font-size: 1.25rem;
+            font-weight: 900;
+        }
+        .semester-overview-heading p { margin-top: .3rem; color: #607287; font-size: .86rem; }
+        .semester-overview-form {
+            display: flex;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            gap: .7rem;
+            padding: 1rem 1.4rem;
+            border-bottom: 1px solid #e4edf5;
+        }
+        .semester-overview-field { display: grid; gap: .3rem; color: #334e68; font-size: .78rem; font-weight: 800; }
+        .semester-overview-field input,
+        .semester-overview-field select {
+            width: 10.5rem;
+            height: 2.65rem;
+            padding: .55rem .7rem;
+            color: #102a43;
+            background: #fff;
+            border: 1px solid #b9cfe0;
+            border-radius: .55rem;
+            outline: none;
+        }
+        .semester-overview-field input:focus,
+        .semester-overview-field select:focus { border-color: #0878d1; box-shadow: 0 0 0 3px rgba(8, 120, 209, .13); }
+        .semester-overview-field select:disabled { color: #52687c; background: #eef3f7; }
+        .semester-overview-search input { width: 13rem; }
+        .semester-overview-custom { display: flex; align-items: flex-end; gap: .5rem; }
+        .semester-overview-custom.hidden { display: none; }
+        .semester-overview-date-separator { padding-bottom: .68rem; color: #64748b; font-weight: 800; }
+        .semester-overview-submit {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .45rem;
+            height: 2.65rem;
+            padding: 0 1.1rem;
+            color: #fff;
+            background: #075dac;
+            border-radius: .55rem;
+            font-weight: 850;
+        }
+        .semester-overview-submit:disabled { opacity: .65; cursor: wait; }
+        .semester-overview-message { min-height: 2.75rem; padding: .8rem 1.4rem; color: #52687c; font-size: .84rem; }
+        .semester-overview-summary {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: .75rem;
+            padding: 0 1.4rem 1rem;
+        }
+        .semester-overview-summary.hidden { display: none; }
+        .semester-overview-summary > div {
+            display: flex;
+            align-items: baseline;
+            gap: .3rem;
+            padding: .85rem 1rem;
+            color: #24445f;
+            background: #f6f9fc;
+            border: 1px solid #dbe6ef;
+            border-radius: .75rem;
+        }
+        .semester-overview-summary span { margin-right: auto; font-size: .78rem; font-weight: 800; }
+        .semester-overview-summary strong { color: #07579e; font-size: 1.45rem; font-weight: 950; }
+        .semester-overview-summary small { font-size: .72rem; font-weight: 800; }
+        .semester-overview-summary .is-registered { background: #effbf5; border-color: #b8e7ce; }
+        .semester-overview-summary .is-registered strong { color: #087a49; }
+        .semester-overview-summary .is-unregistered { background: #fff6f5; border-color: #f1c6c2; }
+        .semester-overview-summary .is-unregistered strong { color: #b83b32; }
+        .semester-overview-summary .is-rate { background: #fff9e8; border-color: #edd998; }
+        .semester-overview-summary .is-rate strong { color: #956700; }
+        .semester-overview-table-wrap { overflow-x: auto; border-top: 1px solid #e4edf5; }
+        .semester-overview-table { width: 100%; min-width: 58rem; text-align: left; border-collapse: collapse; }
+        .semester-overview-table thead { color: #334e68; background: #eaf1f6; }
+        .semester-overview-table th { padding: .85rem 1rem; font-size: .82rem; font-weight: 850; }
+        .semester-overview-table th:nth-child(1) { width: 16rem; }
+        .semester-overview-table th:nth-child(2) { width: 10rem; }
+        .semester-overview-table td { padding: .85rem 1rem; vertical-align: top; border-top: 1px solid #e5edf3; }
+        .semester-overview-student strong { display: block; color: #07579e; font-size: .98rem; }
+        .semester-overview-student span,
+        .semester-overview-student small { display: block; margin-top: .15rem; color: #607287; font-size: .75rem; }
+        .semester-overview-status { display: inline-flex; padding: .3rem .6rem; border-radius: 999px; font-size: .75rem; font-weight: 850; white-space: nowrap; }
+        .semester-overview-status.is-registered { color: #087a49; background: #e9f9f1; border: 1px solid #9ed9bb; }
+        .semester-overview-status.is-unregistered { color: #aa332c; background: #fff0ef; border: 1px solid #efb8b4; }
+        .semester-overview-activities { min-width: 28rem; }
+        .semester-overview-session {
+            display: grid;
+            grid-template-columns: 13rem minmax(12rem, 1fr);
+            align-items: center;
+            gap: .65rem;
+            min-height: 2.2rem;
+            color: #17324d;
+            font-size: .8rem;
+        }
+        .semester-overview-session-date { font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .semester-overview-session-title { min-width: 0; overflow: hidden; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+        .semester-overview-session-title small { margin-left: .35rem; padding: .08rem .35rem; color: #6b3fa0; background: #f3eefe; border-radius: 999px; font-size: .62rem; }
+        .semester-overview-session.is-ended .semester-overview-session-date,
+        .semester-overview-session.is-ended .semester-overview-session-title { color: #9aa5b1; }
+        .semester-overview-none { display: flex; align-items: center; gap: .45rem; color: #9b423c; font-size: .82rem; font-weight: 800; }
+        .semester-overview-more { margin-top: .2rem; color: #52687c; }
+        .semester-overview-more summary { cursor: pointer; color: #075dac; font-size: .76rem; font-weight: 850; }
+        .semester-overview-more[open] summary { margin-bottom: .25rem; }
+        .semester-overview-empty { padding: 2.5rem 1rem !important; color: #7b8794; text-align: center; }
+        .semester-overview-empty i { margin-right: .45rem; }
+        .semester-overview-pagination {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1rem 1.4rem;
+            color: #52687c;
+            border-top: 1px solid #e4edf5;
+            font-size: .8rem;
+            font-weight: 750;
+        }
+        .semester-overview-pagination.hidden { display: none; }
+        .semester-overview-pagination > div { display: flex; align-items: center; gap: .6rem; }
+        .semester-overview-pagination button { display: inline-flex; align-items: center; gap: .35rem; padding: .5rem .75rem; color: #075dac; background: #fff; border: 1px solid #b9cfe0; border-radius: .5rem; font-weight: 800; }
+        .semester-overview-pagination button:disabled { color: #aab7c2; background: #f4f6f8; cursor: not-allowed; }
+
+        @media (max-width: 700px) {
+            .admin-entry-actions { grid-template-columns: 1fr; }
+            .semester-overview-heading,
+            .semester-overview-form,
+            .semester-overview-message { padding-left: 1rem; padding-right: 1rem; }
+            .semester-overview-form { align-items: stretch; }
+            .semester-overview-field,
+            .semester-overview-field input,
+            .semester-overview-field select,
+            .semester-overview-submit { width: 100%; }
+            .semester-overview-custom { width: 100%; align-items: flex-end; }
+            .semester-overview-custom .semester-overview-field { flex: 1 1 0; min-width: 0; }
+            .semester-overview-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); padding-left: 1rem; padding-right: 1rem; }
+            .semester-overview-summary > div { display: grid; grid-template-columns: 1fr auto; gap: .1rem .25rem; }
+            .semester-overview-summary span { grid-column: 1 / -1; margin: 0; }
+            .semester-overview-pagination { padding-left: 1rem; padding-right: 1rem; }
         }

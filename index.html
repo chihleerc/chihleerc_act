@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 致理．心夥伴 - 活動報名系統｜學生報名查詢版 V11.21.22｜2026-10-20 19:24 -->
+<!-- 致理．心夥伴 - 活動報名系統｜學期報名概況版 V11.21.23｜2026-10-29 -->
 <html lang="zh-TW" class="frame-guard-pending">
 <head>
     <meta charset="UTF-8">
@@ -212,12 +212,14 @@
                     <button type="button" data-action="quick-add-event" class="is-primary"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>快速新增活動</span><small>只載入表單必要資料</small></button>
                     <button type="button" data-action="load-admin-dashboard"><i class="fa-solid fa-list-check" aria-hidden="true"></i><span>管理活動與報名</span><small>需要時才載入完整清單</small></button>
                     <button type="button" data-action="open-student-registration-lookup"><i class="fa-solid fa-user-check" aria-hidden="true"></i><span>查詢學生報名</span><small>依學號與日期區間查詢</small></button>
+                    <button type="button" data-action="open-semester-overview"><i class="fa-solid fa-chart-column" aria-hidden="true"></i><span>學期報名概況</span><small>查看個管學生已報名與未報名情形</small></button>
                 </div>
             </section>
 
             <div id="admin-tabs-bar" class="hidden flex space-x-2 md:space-x-4 mb-4 md:mb-6 border-b pb-2 overflow-x-auto no-scrollbar whitespace-nowrap">
                 <button id="tabActivityList" data-action="switch-admin-tab" data-tab="list" class="font-bold text-gray-800 border-b-2 border-chihlee-blue pb-1 px-2 transition text-sm md:text-base">活動列表</button>
                 <button id="tabStudentLookup" data-action="switch-admin-tab" data-tab="studentLookup" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">學生報名查詢</button>
+                <button id="tabSemesterOverview" data-action="switch-admin-tab" data-tab="semesterOverview" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">學期報名概況</button>
                 <button id="tabActivityLog" data-action="switch-admin-tab" data-tab="log" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">動態紀錄</button>
                 <button id="tabDataQuality" data-action="switch-admin-tab" data-tab="quality" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">資料檢查</button>
             </div>
@@ -327,6 +329,64 @@
                     </form>
                     <div id="admin-student-lookup-status" class="student-registration-lookup-status" role="status" aria-live="polite">請輸入學號後查詢。</div>
                     <div id="admin-student-lookup-result" class="hidden"></div>
+                </div>
+            </div>
+
+            <!-- 學期報名概況：以 Students 名冊為母體，按需比對指定區間的實際參加場次。 -->
+            <div id="adminSemesterOverviewSection" class="hidden w-full">
+                <div class="semester-overview-panel">
+                    <div class="semester-overview-heading">
+                        <div>
+                            <h2><i class="fa-solid fa-chart-column" aria-hidden="true"></i>學期報名概況</h2>
+                            <p>依個管與日期區間，查看學生已報名的活動場次及完全未報名名單。</p>
+                        </div>
+                    </div>
+                    <form id="admin-semester-overview-form" data-submit-action="admin-semester-overview" class="semester-overview-form" novalidate>
+                        <label class="semester-overview-field">
+                            <span>個管老師</span>
+                            <select id="admin-semester-overview-counselor"><option value="">全部個管</option></select>
+                        </label>
+                        <label class="semester-overview-field">
+                            <span>學年度</span>
+                            <select id="admin-semester-overview-year" data-change-action="semester-overview-range"></select>
+                        </label>
+                        <label class="semester-overview-field">
+                            <span>學期</span>
+                            <select id="admin-semester-overview-range" data-change-action="semester-overview-range">
+                                <option value="first">第1學期</option>
+                                <option value="second">第2學期</option>
+                                <option value="academicYear">整學年度</option>
+                                <option value="custom">自訂日期</option>
+                            </select>
+                        </label>
+                        <div id="admin-semester-overview-custom-range" class="semester-overview-custom hidden">
+                            <label class="semester-overview-field"><span>開始日期</span><input id="admin-semester-overview-start" type="date"></label>
+                            <span class="semester-overview-date-separator" aria-hidden="true">至</span>
+                            <label class="semester-overview-field"><span>結束日期</span><input id="admin-semester-overview-end" type="date"></label>
+                        </div>
+                        <label class="semester-overview-field">
+                            <span>報名狀態</span>
+                            <select id="admin-semester-overview-filter">
+                                <option value="all">全部學生</option>
+                                <option value="registered">已有報名</option>
+                                <option value="unregistered">完全未報名</option>
+                            </select>
+                        </label>
+                        <label class="semester-overview-field semester-overview-search">
+                            <span>搜尋學生</span>
+                            <input id="admin-semester-overview-search" type="search" maxlength="50" autocomplete="off" placeholder="姓名、學號或班級">
+                        </label>
+                        <button id="admin-semester-overview-submit" type="submit" class="semester-overview-submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>查詢</button>
+                    </form>
+                    <div id="admin-semester-overview-status" class="semester-overview-message" role="status" aria-live="polite">正在準備本學期報名概況。</div>
+                    <div id="admin-semester-overview-summary" class="semester-overview-summary hidden"></div>
+                    <div class="semester-overview-table-wrap custom-scroll">
+                        <table class="semester-overview-table">
+                            <thead><tr><th>學生／個管</th><th>狀態</th><th>報名活動與場次</th></tr></thead>
+                            <tbody id="admin-semester-overview-tbody"><tr><td colspan="3" class="semester-overview-empty">尚未查詢</td></tr></tbody>
+                        </table>
+                    </div>
+                    <div id="admin-semester-overview-pagination" class="semester-overview-pagination hidden"></div>
                 </div>
             </div>
 

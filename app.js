@@ -9,7 +9,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             studentIdentity: null, registeredEventIds: [], pendingRegistrationIds: {},
             eventCounts: new Map(), calendarYear: null, calendarMonth: null, calendarSelectedDate: '',
             publicPage: 0, publicHasMore: false, publicTotal: 0, publicCategoryCounts: {}, publicLoadingMore: false,
-            adminDataLoaded: false, adminLogsLoaded: false, calendarFullDataLoaded: false, adminStudentLookupInitialized: false,
+            adminDataLoaded: false, adminLogsLoaded: false, calendarFullDataLoaded: false, adminStudentLookupInitialized: false, adminSemesterOverviewInitialized: false,
+            adminSemesterOverviewPage: 1,
             adminPagination: { page: 1, pageSize: 5, total: 0, totalPages: 1, scope: 'upcoming' },
             adminFilterOptions: { years: [], teachers: [] },
             adminPageEvents: [], adminPageEventStats: {}, publicEventsSnapshot: [], publicEventStatsSnapshot: {},
@@ -169,6 +170,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 'quick-add-event': () => quickAddEvent(),
                 'load-admin-dashboard': () => loadAdminDashboard(),
                 'reload-data': () => loadAdminDashboard(state.adminCurrentPage || 1, true),
+                'open-semester-overview': () => openAdminSemesterOverview(),
                 'open-edit-event': () => openEditEventModal(eventId || undefined),
                 'choose-event-images': () => document.getElementById('edit-images-input').click(),
                 'close-modal': () => closeModal(target.dataset.modal),
@@ -196,6 +198,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 'open-participants': () => loadEventParticipants(eventId, 'participants'),
                 'open-notify': () => loadEventParticipants(eventId, 'notify'),
                 'dashboard-page': () => loadAdminDashboard(Number(target.dataset.page) || 1, true),
+                'semester-overview-page': () => executeAdminSemesterOverview(null, Number(target.dataset.page) || 1),
                 'remove-temp-tag': () => { removeTempTag(Number(target.dataset.index)); markDirty(); },
                 'remove-temp-session': () => { removeTempSession(Number(target.dataset.index)); markDirty(); },
                 'remove-temp-image': () => removeTempImage(Number(target.dataset.index)),
@@ -214,6 +217,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             else if (action === 'registration') submitRegistration(event);
             else if (action === 'event-edit') submitEventEdit(event);
             else if (action === 'admin-student-lookup') executeAdminStudentLookup(event);
+            else if (action === 'admin-semester-overview') executeAdminSemesterOverview(event, 1);
         });
 
         let adminFilterTimer = null;
@@ -252,6 +256,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 renderArchivePreview(null);
             }
             else if (action === 'student-lookup-range') updateAdminStudentLookupRange(target.value);
+            else if (action === 'semester-overview-range') updateAdminSemesterOverviewRange(target.value);
         });
 
         document.addEventListener('blur', event => {
@@ -491,7 +496,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         // 固定記錄這一版完成修改的時間，不會因登入、重新整理或查詢資料而改變。
-        const VERSION_LABEL = 'V11.21.22';
+        const VERSION_LABEL = 'V11.21.23';
         const VERSION_UPDATED_AT = '2026/10/20 19:24';
         const VERSION_UPDATED_AT_ISO = '2026-10-20T19:24:00+08:00';
         const API_TIMEOUT_MS = 20000;
@@ -601,6 +606,21 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     )
                 )
             )) throw new Error('學生報名查詢結果格式不正確');
+            if (action === 'getAdminSemesterOverview' && (
+                !isPlainObject(data) || !isPlainObject(data.range) || !isPlainObject(data.filters) ||
+                !isPlainObject(data.summary) || !isPlainObject(data.pagination) ||
+                !Array.isArray(data.filters.counselors) || !Array.isArray(data.students) ||
+                data.pagination.pageSize !== 20 || data.students.some(student =>
+                    !isPlainObject(student) || typeof student.id !== 'string' ||
+                    typeof student.name !== 'string' || typeof student.counselor !== 'string' ||
+                    typeof student.hasRegistration !== 'boolean' || !Array.isArray(student.sessions) ||
+                    student.sessions.some(session =>
+                        !isPlainObject(session) || typeof session.title !== 'string' ||
+                        typeof session.date !== 'string' || typeof session.time !== 'string' ||
+                        typeof session.isEnded !== 'boolean'
+                    )
+                )
+            )) throw new Error('學期報名概況格式不正確');
             if (action === 'sendLineNotification' && (
                 typeof response.successCount !== 'number' || typeof response.failCount !== 'number' || !Array.isArray(response.failedStudents) ||
                 !isPlainObject(response.lineUsage)
@@ -1875,6 +1895,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     else {
                         document.getElementById('adminActivitySection').classList.add('hidden');
                         document.getElementById('adminStudentLookupSection').classList.add('hidden');
+                        document.getElementById('adminSemesterOverviewSection').classList.add('hidden');
                         document.getElementById('adminLogSection').classList.add('hidden');
                         document.getElementById('adminDataQualitySection').classList.add('hidden');
                     }
@@ -2136,7 +2157,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             }
             state.adminCreds = null; state.isTeacherLoggedIn = false; state.currentUserRole = null; state.currentUserName = null;
             sessionStorage.removeItem(ADMIN_SESSION_STORAGE_KEY);
-            state.adminDataLoaded = false; state.adminLogsLoaded = false; state.adminStudentLookupInitialized = false;
+            state.adminDataLoaded = false; state.adminLogsLoaded = false; state.adminStudentLookupInitialized = false; state.adminSemesterOverviewInitialized = false;
             state.adminPageEvents = []; state.adminPageEventStats = {}; state.publicEventsSnapshot = []; state.publicEventStatsSnapshot = {};
             resetAdminStudentLookup();
             invalidateCalendarData();
@@ -3058,6 +3079,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             if (entryPanel) entryPanel.classList.add('hidden');
             document.getElementById('adminActivitySection').classList.toggle('hidden', tab !== 'list');
             document.getElementById('adminStudentLookupSection').classList.toggle('hidden', tab !== 'studentLookup');
+            document.getElementById('adminSemesterOverviewSection').classList.toggle('hidden', tab !== 'semesterOverview');
             document.getElementById('adminLogSection').classList.toggle('hidden', tab !== 'log');
             document.getElementById('adminDataQualitySection').classList.toggle('hidden', tab !== 'quality');
 
@@ -3066,9 +3088,11 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
 
             document.getElementById('tabActivityList').className = tab === 'list' ? activeTabClass : defaultTabClass;
             document.getElementById('tabStudentLookup').className = tab === 'studentLookup' ? activeTabClass : defaultTabClass;
+            document.getElementById('tabSemesterOverview').className = tab === 'semesterOverview' ? activeTabClass : defaultTabClass;
             document.getElementById('tabActivityLog').className = tab === 'log' ? activeTabClass : defaultTabClass;
             document.getElementById('tabDataQuality').className = tab === 'quality' ? activeTabClass : defaultTabClass;
             if (tab === 'studentLookup') initializeAdminStudentLookup();
+            if (tab === 'semesterOverview') initializeAdminSemesterOverview();
             if (tab === 'log') {
                 renderLogs();
                 if (!state.adminLogsLoaded) void loadAdminLogs();
@@ -3086,6 +3110,13 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             switchAdminTab('studentLookup');
             const input = document.getElementById('admin-student-lookup-id');
             if (input) input.focus();
+        }
+
+        function openAdminSemesterOverview() {
+            if (!state.adminCreds) return switchView('teacherLogin');
+            const tabs = document.getElementById('admin-tabs-bar');
+            if (tabs) tabs.classList.remove('hidden');
+            switchAdminTab('semesterOverview');
         }
 
         function getTaipeiCalendarParts(date = new Date()) {
@@ -3238,6 +3269,183 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     result.classList.add('hidden');
                 }
                 if (status) status.textContent = getRequestErrorMessage(error, '學生報名資料暫時無法讀取');
+            } finally {
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = '<i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>查詢';
+                }
+            }
+        }
+
+        function initializeAdminSemesterOverview() {
+            if (state.adminSemesterOverviewInitialized) return;
+            state.adminSemesterOverviewInitialized = true;
+            const { year, month } = getTaipeiCalendarParts();
+            const academicYearStart = month >= 8 ? year : year - 1;
+            const yearSelect = document.getElementById('admin-semester-overview-year');
+            if (yearSelect) {
+                yearSelect.innerHTML = '';
+                for (let startYear = academicYearStart + 1; startYear >= academicYearStart - 6; startYear--) {
+                    const option = document.createElement('option');
+                    option.value = String(startYear);
+                    option.textContent = `${startYear - 1911}學年度`;
+                    option.selected = startYear === academicYearStart;
+                    yearSelect.appendChild(option);
+                }
+            }
+            const rangeSelect = document.getElementById('admin-semester-overview-range');
+            if (rangeSelect) rangeSelect.value = (month >= 8 || month === 1) ? 'first' : 'second';
+            updateAdminSemesterOverviewRange();
+            const counselorSelect = document.getElementById('admin-semester-overview-counselor');
+            if (counselorSelect && state.currentUserRole === 'staff') {
+                counselorSelect.innerHTML = `<option value="${escapeHTML(state.currentUserName || '')}">${escapeHTML(state.currentUserName || '目前帳號')}</option>`;
+                counselorSelect.disabled = true;
+            }
+            void executeAdminSemesterOverview(null, 1);
+        }
+
+        function updateAdminSemesterOverviewRange() {
+            const customRange = document.getElementById('admin-semester-overview-custom-range');
+            const startInput = document.getElementById('admin-semester-overview-start');
+            const endInput = document.getElementById('admin-semester-overview-end');
+            const yearSelect = document.getElementById('admin-semester-overview-year');
+            const rangeSelect = document.getElementById('admin-semester-overview-range');
+            if (!customRange || !startInput || !endInput || !yearSelect || !rangeSelect) return;
+            const preset = rangeSelect.value;
+            const startYear = Number(yearSelect.value);
+            customRange.classList.toggle('hidden', preset !== 'custom');
+            if (preset !== 'custom' && Number.isInteger(startYear)) {
+                if (preset === 'first') {
+                    startInput.value = `${startYear}-08-01`;
+                    endInput.value = `${startYear + 1}-01-31`;
+                } else if (preset === 'second') {
+                    startInput.value = `${startYear + 1}-02-01`;
+                    endInput.value = `${startYear + 1}-07-31`;
+                } else {
+                    startInput.value = `${startYear}-08-01`;
+                    endInput.value = `${startYear + 1}-07-31`;
+                }
+            } else if (!startInput.value || !endInput.value) {
+                startInput.value = `${startYear}-08-01`;
+                endInput.value = `${startYear + 1}-01-31`;
+            }
+        }
+
+        function populateSemesterOverviewCounselors(filters) {
+            const select = document.getElementById('admin-semester-overview-counselor');
+            if (!select || state.currentUserRole !== 'admin') return;
+            const selected = String(filters && filters.counselor || select.value || '');
+            const counselors = Array.isArray(filters && filters.counselors) ? filters.counselors : [];
+            select.innerHTML = '<option value="">全部個管</option>' + counselors.map(name =>
+                `<option value="${escapeHTML(name)}" ${name === selected ? 'selected' : ''}>${escapeHTML(name)}</option>`
+            ).join('');
+        }
+
+        function renderSemesterOverviewSession(session) {
+            const endedClass = session.isEnded ? ' is-ended' : '';
+            const seriesTag = session.isSeries ? '<small>系列</small>' : '';
+            return `<div class="semester-overview-session${endedClass}">
+                <span class="semester-overview-session-date">${escapeHTML(formatSessionDate(session.date))} ${escapeHTML(getDayOfWeek(session.date))}　${escapeHTML(formatSessionTime(session.time))}</span>
+                <span class="semester-overview-session-title" title="${escapeHTML(session.title)}">${escapeHTML(session.title)}${seriesTag}</span>
+            </div>`;
+        }
+
+        function renderAdminSemesterOverview(data) {
+            const summary = data.summary || {};
+            const pagination = data.pagination || {};
+            const students = Array.isArray(data.students) ? data.students : [];
+            const summaryEl = document.getElementById('admin-semester-overview-summary');
+            const tbody = document.getElementById('admin-semester-overview-tbody');
+            const paginationEl = document.getElementById('admin-semester-overview-pagination');
+            const statusEl = document.getElementById('admin-semester-overview-status');
+            if (!summaryEl || !tbody || !paginationEl || !statusEl) return;
+
+            populateSemesterOverviewCounselors(data.filters || {});
+            summaryEl.innerHTML = `
+                <div><span>負責學生</span><strong>${Number(summary.totalStudents) || 0}</strong><small>人</small></div>
+                <div class="is-registered"><span>已有報名</span><strong>${Number(summary.registeredStudents) || 0}</strong><small>人</small></div>
+                <div class="is-unregistered"><span>完全未報名</span><strong>${Number(summary.unregisteredStudents) || 0}</strong><small>人</small></div>
+                <div class="is-rate"><span>本期報名率</span><strong>${Number(summary.registrationRate) || 0}</strong><small>%</small></div>`;
+            summaryEl.classList.remove('hidden');
+
+            if (!students.length) {
+                tbody.innerHTML = '<tr><td colspan="3" class="semester-overview-empty"><i class="fa-regular fa-folder-open" aria-hidden="true"></i>目前條件下沒有學生資料</td></tr>';
+            } else {
+                tbody.innerHTML = students.map(student => {
+                    const meta = [student.eduSystem, student.className, student.id].filter(Boolean).join('｜');
+                    const sessions = Array.isArray(student.sessions) ? student.sessions : [];
+                    const visibleSessions = sessions.slice(0, 3).map(renderSemesterOverviewSession).join('');
+                    const moreSessions = sessions.length > 3
+                        ? `<details class="semester-overview-more"><summary>再顯示 ${sessions.length - 3} 場</summary>${sessions.slice(3).map(renderSemesterOverviewSession).join('')}</details>`
+                        : '';
+                    const activityHtml = student.hasRegistration
+                        ? `${visibleSessions}${moreSessions}`
+                        : '<div class="semester-overview-none"><i class="fa-regular fa-calendar-xmark" aria-hidden="true"></i>本區間完全未報名</div>';
+                    const statusHtml = student.hasRegistration
+                        ? `<span class="semester-overview-status is-registered">已報名 ${Number(student.activityCount) || 0} 項／${Number(student.sessionCount) || 0} 場</span>`
+                        : '<span class="semester-overview-status is-unregistered">未報名</span>';
+                    return `<tr>
+                        <td class="semester-overview-student"><strong>${escapeHTML(student.name)}</strong><span>${escapeHTML(meta)}</span><small>${escapeHTML(student.counselor)}</small></td>
+                        <td>${statusHtml}</td>
+                        <td class="semester-overview-activities">${activityHtml}</td>
+                    </tr>`;
+                }).join('');
+            }
+
+            const page = Number(pagination.page) || 1;
+            const totalPages = Number(pagination.totalPages) || 1;
+            paginationEl.innerHTML = `<span>顯示 ${Number(pagination.total) || 0} 位學生</span><div>
+                <button type="button" data-action="semester-overview-page" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}><i class="fa-solid fa-chevron-left" aria-hidden="true"></i>上一頁</button>
+                <strong>${page}／${totalPages}</strong>
+                <button type="button" data-action="semester-overview-page" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>下一頁<i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>
+            </div>`;
+            paginationEl.classList.toggle('hidden', Number(pagination.total) === 0);
+            const range = data.range || {};
+            statusEl.textContent = `查詢完成：${formatSessionDate(range.startDate)}－${formatSessionDate(range.endDate)}，共 ${Number(summary.totalStudents) || 0} 位學生。`;
+        }
+
+        async function executeAdminSemesterOverview(event, page = 1) {
+            if (event && event.preventDefault) event.preventDefault();
+            if (!state.adminCreds) return switchView('teacherLogin');
+            const startInput = document.getElementById('admin-semester-overview-start');
+            const endInput = document.getElementById('admin-semester-overview-end');
+            const counselorSelect = document.getElementById('admin-semester-overview-counselor');
+            const statusSelect = document.getElementById('admin-semester-overview-filter');
+            const searchInput = document.getElementById('admin-semester-overview-search');
+            const submitButton = document.getElementById('admin-semester-overview-submit');
+            const statusEl = document.getElementById('admin-semester-overview-status');
+            const tbody = document.getElementById('admin-semester-overview-tbody');
+            const startDate = startInput ? startInput.value : '';
+            const endDate = endInput ? endInput.value : '';
+            if (!startDate || !endDate || startDate > endDate) {
+                if (statusEl) statusEl.textContent = '請確認開始日期與結束日期。';
+                return;
+            }
+            state.adminSemesterOverviewPage = Math.max(1, Number(page) || 1);
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>查詢中';
+            }
+            if (statusEl) statusEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> 正在統整學生名單與報名場次，請稍候…';
+            if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="semester-overview-empty"><i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>資料讀取中</td></tr>';
+            try {
+                const response = await apiRequest({
+                    action: 'getAdminSemesterOverview',
+                    startDate,
+                    endDate,
+                    counselor: state.currentUserRole === 'staff' ? state.currentUserName : (counselorSelect ? counselorSelect.value : ''),
+                    status: statusSelect ? statusSelect.value : 'all',
+                    search: searchInput ? searchInput.value.trim() : '',
+                    page: state.adminSemesterOverviewPage,
+                    adminAcc: state.adminCreds.acc,
+                    adminToken: state.adminCreds.token
+                }, 30000);
+                if (checkTokenExpiration(response)) return;
+                if (!response.success) throw Object.assign(new Error(response.error || '查詢失敗'), { code: response.code });
+                renderAdminSemesterOverview(response.data);
+            } catch (error) {
+                if (statusEl) statusEl.textContent = getRequestErrorMessage(error, '學期報名概況暫時無法讀取');
+                if (tbody) tbody.innerHTML = '<tr><td colspan="3" class="semester-overview-empty is-error">資料載入失敗，請稍後重試。</td></tr>';
             } finally {
                 if (submitButton) {
                     submitButton.disabled = false;
