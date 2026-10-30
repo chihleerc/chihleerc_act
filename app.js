@@ -10,7 +10,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             eventCounts: new Map(), calendarYear: null, calendarMonth: null, calendarSelectedDate: '',
             publicPage: 0, publicHasMore: false, publicTotal: 0, publicCategoryCounts: {}, publicLoadingMore: false,
             adminDataLoaded: false, adminLogsLoaded: false, calendarFullDataLoaded: false, adminStudentLookupInitialized: false, adminSemesterOverviewInitialized: false,
-            adminSemesterOverviewPage: 1,
+            adminSemesterOverviewPage: 1, adminStudentTermsInitialized: false, adminStudentTermsPage: 1, adminStudentTermsRolloverPlan: null,
             adminPagination: { page: 1, pageSize: 5, total: 0, totalPages: 1, scope: 'upcoming' },
             adminFilterOptions: { years: [], teachers: [] },
             adminPageEvents: [], adminPageEventStats: {}, publicEventsSnapshot: [], publicEventStatsSnapshot: {},
@@ -171,6 +171,13 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 'load-admin-dashboard': () => loadAdminDashboard(),
                 'reload-data': () => loadAdminDashboard(state.adminCurrentPage || 1, true),
                 'open-semester-overview': () => openAdminSemesterOverview(),
+                'open-student-term-roster': () => openAdminStudentTerms(),
+                'initialize-student-term-roster': () => initializeStudentTermRoster(),
+                'preview-student-term-rollover': () => previewStudentTermRollover(),
+                'commit-student-term-rollover': () => commitStudentTermRollover(),
+                'cancel-student-term-rollover': () => clearStudentTermRolloverPreview(),
+                'refresh-student-term-roster': () => refreshStudentTermRoster(),
+                'save-student-term-exclusion': () => saveStudentTermExclusion(target.dataset.studentId || ''),
                 'open-edit-event': () => openEditEventModal(eventId || undefined),
                 'choose-event-images': () => document.getElementById('edit-images-input').click(),
                 'close-modal': () => closeModal(target.dataset.modal),
@@ -199,6 +206,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 'open-notify': () => loadEventParticipants(eventId, 'notify'),
                 'dashboard-page': () => loadAdminDashboard(Number(target.dataset.page) || 1, true),
                 'semester-overview-page': () => executeAdminSemesterOverview(null, Number(target.dataset.page) || 1),
+                'student-terms-page': () => loadAdminStudentTerms(Number(target.dataset.page) || 1),
                 'remove-temp-tag': () => { removeTempTag(Number(target.dataset.index)); markDirty(); },
                 'remove-temp-session': () => { removeTempSession(Number(target.dataset.index)); markDirty(); },
                 'remove-temp-image': () => removeTempImage(Number(target.dataset.index)),
@@ -218,6 +226,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             else if (action === 'event-edit') submitEventEdit(event);
             else if (action === 'admin-student-lookup') executeAdminStudentLookup(event);
             else if (action === 'admin-semester-overview') executeAdminSemesterOverview(event, 1);
+            else if (action === 'admin-student-terms') { event.preventDefault(); loadAdminStudentTerms(1); }
         });
 
         let adminFilterTimer = null;
@@ -257,6 +266,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             }
             else if (action === 'student-lookup-range') updateAdminStudentLookupRange(target.value);
             else if (action === 'semester-overview-range') updateAdminSemesterOverviewRange(target.value);
+            else if (action === 'student-terms-selection') clearStudentTermRolloverPreview();
+            else if (action === 'student-term-exclusion-toggle') updateStudentTermExclusionControls(target.dataset.studentId || '');
         });
 
         document.addEventListener('blur', event => {
@@ -496,9 +507,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         // 固定記錄這一版完成修改的時間，不會因登入、重新整理或查詢資料而改變。
-        const VERSION_LABEL = 'V11.21.24';
-        const VERSION_UPDATED_AT = '2026/10/29 20:00';
-        const VERSION_UPDATED_AT_ISO = '2026-10-29T20:00:00+08:00';
+        const VERSION_LABEL = 'V11.21.25';
+        const VERSION_UPDATED_AT = '2026/10/30 08:48';
+        const VERSION_UPDATED_AT_ISO = '2026-10-30T08:48:00+08:00';
         const API_TIMEOUT_MS = 20000;
         const LOGIN_TIMEOUT_MS = 25000;
         const ADMIN_DATA_TIMEOUT_MS = 45000;
@@ -608,12 +619,14 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             )) throw new Error('學生報名查詢結果格式不正確');
             if (action === 'getAdminSemesterOverview' && (
                 !isPlainObject(data) || !isPlainObject(data.range) || !isPlainObject(data.filters) ||
-                !isPlainObject(data.summary) || !isPlainObject(data.pagination) ||
+                !isPlainObject(data.summary) || !isPlainObject(data.pagination) || !isPlainObject(data.roster) ||
                 !Array.isArray(data.filters.counselors) || !Array.isArray(data.students) ||
                 data.pagination.pageSize !== 30 || typeof data.filters.excludeOneOnOne !== 'boolean' ||
+                typeof data.filters.excludeSpecial !== 'boolean' ||
                 data.students.some(student =>
                     !isPlainObject(student) || typeof student.id !== 'string' ||
-                    typeof student.name !== 'string' ||
+                    typeof student.name !== 'string' || typeof student.excludedFromStats !== 'boolean' ||
+                    typeof student.exclusionReason !== 'string' ||
                     typeof student.hasRegistration !== 'boolean' || !isPlainObject(student.categoryCounts) ||
                     !Array.isArray(student.sessions) ||
                     student.sessions.some(session =>
@@ -623,6 +636,33 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     )
                 )
             )) throw new Error('學期報名概況格式不正確');
+            if (action === 'getAdminStudentTermRoster' && (
+                !isPlainObject(data) || typeof data.initialized !== 'boolean' ||
+                !isPlainObject(data.summary) || !isPlainObject(data.pagination) ||
+                data.pagination.pageSize !== 30 || !Array.isArray(data.reasons) || !Array.isArray(data.students) ||
+                data.students.some(student =>
+                    !isPlainObject(student) || typeof student.studentId !== 'string' ||
+                    typeof student.studentName !== 'string' || typeof student.counselor !== 'string' ||
+                    typeof student.excludeFromStats !== 'boolean' || typeof student.exclusionReason !== 'string'
+                )
+            )) throw new Error('學期名冊格式不正確');
+            if (action === 'initializeAdminStudentTermRoster' && (
+                !isPlainObject(data) || typeof data.createdCount !== 'number'
+            )) throw new Error('建立學期名冊結果格式不正確');
+            if (action === 'previewAdminStudentTermRollover' && (
+                !isPlainObject(data) || !isPlainObject(data.summary) || !isPlainObject(data.target) || !Array.isArray(data.items)
+            )) throw new Error('學期名冊升級預覽格式不正確');
+            if (action === 'commitAdminStudentTermRollover' && (
+                !isPlainObject(data) || !isPlainObject(data.target) || typeof data.willCreate !== 'number'
+            )) throw new Error('建立下一學期名冊結果格式不正確');
+            if (action === 'saveAdminStudentTermExclusion' && (
+                !isPlainObject(data) || typeof data.studentId !== 'string' || typeof data.excludeFromStats !== 'boolean'
+            )) throw new Error('名冊統計設定儲存結果格式不正確');
+            if (action === 'refreshAdminStudentTermRoster' && (
+                !isPlainObject(data) || typeof data.validatedRows !== 'number' ||
+                typeof data.termStudents !== 'number' || typeof data.syncedStudents !== 'number' ||
+                typeof data.syncedToStudents !== 'boolean'
+            )) throw new Error('名冊同步結果格式不正確');
             if (action === 'sendLineNotification' && (
                 typeof response.successCount !== 'number' || typeof response.failCount !== 'number' || !Array.isArray(response.failedStudents) ||
                 !isPlainObject(response.lineUsage)
@@ -1898,6 +1938,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                         document.getElementById('adminActivitySection').classList.add('hidden');
                         document.getElementById('adminStudentLookupSection').classList.add('hidden');
                         document.getElementById('adminSemesterOverviewSection').classList.add('hidden');
+                        document.getElementById('adminStudentTermsSection').classList.add('hidden');
                         document.getElementById('adminLogSection').classList.add('hidden');
                         document.getElementById('adminDataQualitySection').classList.add('hidden');
                     }
@@ -1912,6 +1953,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             document.getElementById('nav-staff-badge').classList.toggle('hidden', state.currentUserRole !== 'staff');
             const archivePanel = document.getElementById('annual-archive-panel');
             if (archivePanel) archivePanel.classList.toggle('hidden', state.currentUserRole !== 'admin');
+            document.querySelectorAll('.admin-only-student-terms').forEach(element => {
+                element.classList.toggle('hidden', state.currentUserRole !== 'admin');
+            });
 
             if (state.isTeacherLoggedIn && state.currentUserRole === 'staff') {
                 document.getElementById('nav-staff-badge').innerHTML = `<i class="fa-solid fa-user-shield mr-1"></i><span class="hidden sm:inline">${escapeHTML(state.currentUserName)}</span>`;
@@ -2159,7 +2203,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             }
             state.adminCreds = null; state.isTeacherLoggedIn = false; state.currentUserRole = null; state.currentUserName = null;
             sessionStorage.removeItem(ADMIN_SESSION_STORAGE_KEY);
-            state.adminDataLoaded = false; state.adminLogsLoaded = false; state.adminStudentLookupInitialized = false; state.adminSemesterOverviewInitialized = false;
+            state.adminDataLoaded = false; state.adminLogsLoaded = false; state.adminStudentLookupInitialized = false; state.adminSemesterOverviewInitialized = false; state.adminStudentTermsInitialized = false;
+            state.adminStudentTermsPage = 1; state.adminStudentTermsRolloverPlan = null;
             state.adminPageEvents = []; state.adminPageEventStats = {}; state.publicEventsSnapshot = []; state.publicEventStatsSnapshot = {};
             resetAdminStudentLookup();
             invalidateCalendarData();
@@ -3082,6 +3127,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             document.getElementById('adminActivitySection').classList.toggle('hidden', tab !== 'list');
             document.getElementById('adminStudentLookupSection').classList.toggle('hidden', tab !== 'studentLookup');
             document.getElementById('adminSemesterOverviewSection').classList.toggle('hidden', tab !== 'semesterOverview');
+            document.getElementById('adminStudentTermsSection').classList.toggle('hidden', tab !== 'studentTerms');
             document.getElementById('adminLogSection').classList.toggle('hidden', tab !== 'log');
             document.getElementById('adminDataQualitySection').classList.toggle('hidden', tab !== 'quality');
 
@@ -3091,10 +3137,15 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             document.getElementById('tabActivityList').className = tab === 'list' ? activeTabClass : defaultTabClass;
             document.getElementById('tabStudentLookup').className = tab === 'studentLookup' ? activeTabClass : defaultTabClass;
             document.getElementById('tabSemesterOverview').className = tab === 'semesterOverview' ? activeTabClass : defaultTabClass;
+            document.getElementById('tabStudentTerms').className = `admin-only-student-terms ${state.currentUserRole === 'admin' ? '' : 'hidden '}${tab === 'studentTerms' ? activeTabClass : defaultTabClass}`;
             document.getElementById('tabActivityLog').className = tab === 'log' ? activeTabClass : defaultTabClass;
             document.getElementById('tabDataQuality').className = tab === 'quality' ? activeTabClass : defaultTabClass;
             if (tab === 'studentLookup') initializeAdminStudentLookup();
             if (tab === 'semesterOverview') initializeAdminSemesterOverview();
+            if (tab === 'studentTerms') {
+                if (state.currentUserRole !== 'admin') return switchAdminTab('semesterOverview');
+                initializeAdminStudentTerms();
+            }
             if (tab === 'log') {
                 renderLogs();
                 if (!state.adminLogsLoaded) void loadAdminLogs();
@@ -3119,6 +3170,14 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             const tabs = document.getElementById('admin-tabs-bar');
             if (tabs) tabs.classList.remove('hidden');
             switchAdminTab('semesterOverview');
+        }
+
+        function openAdminStudentTerms() {
+            if (!state.adminCreds) return switchView('teacherLogin');
+            if (state.currentUserRole !== 'admin') return showToast('只有系統管理員可以管理學期名冊', 'error');
+            const tabs = document.getElementById('admin-tabs-bar');
+            if (tabs) tabs.classList.remove('hidden');
+            switchAdminTab('studentTerms');
         }
 
         function getTaipeiCalendarParts(date = new Date()) {
@@ -3300,6 +3359,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             updateAdminSemesterOverviewRange();
             const excludeOneOnOne = document.getElementById('admin-semester-overview-exclude-one-on-one');
             if (excludeOneOnOne) excludeOneOnOne.checked = true;
+            const excludeSpecial = document.getElementById('admin-semester-overview-exclude-special');
+            if (excludeSpecial) excludeSpecial.checked = true;
             const counselorSelect = document.getElementById('admin-semester-overview-counselor');
             if (counselorSelect && state.currentUserRole === 'staff') {
                 counselorSelect.innerHTML = `<option value="${escapeHTML(state.currentUserName || '')}">${escapeHTML(state.currentUserName || '目前帳號')}</option>`;
@@ -3405,10 +3466,12 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     const moreSessions = sessions.length > 3
                         ? `<details class="semester-overview-more"><summary>再顯示 ${sessions.length - 3} 場</summary>${sessions.slice(3).map(renderSemesterOverviewSession).join('')}</details>`
                         : '';
-                    const activityHtml = student.hasRegistration
+                    const activityHtml = sessions.length
                         ? `${visibleSessions}${moreSessions}`
                         : '<div class="semester-overview-none"><i class="fa-regular fa-calendar-xmark" aria-hidden="true"></i>本區間完全未報名</div>';
-                    const statusHtml = `<div class="semester-overview-participation"><strong class="${student.hasRegistration ? 'is-registered' : 'is-unregistered'}">${student.hasRegistration ? `參加 ${Number(student.activityCount) || 0} 項／${Number(student.sessionCount) || 0} 場` : '未報名'}</strong>${renderSemesterOverviewCategoryCounts(student.categoryCounts)}</div>`;
+                    const statusHtml = student.excludedFromStats
+                        ? `<div class="semester-overview-participation"><strong class="semester-overview-excluded">不列入統計：${escapeHTML(student.exclusionReason || '未註明')}</strong>${renderSemesterOverviewCategoryCounts(student.categoryCounts)}</div>`
+                        : `<div class="semester-overview-participation"><strong class="${student.hasRegistration ? 'is-registered' : 'is-unregistered'}">${student.hasRegistration ? `參加 ${Number(student.activityCount) || 0} 項／${Number(student.sessionCount) || 0} 場` : '未報名'}</strong>${renderSemesterOverviewCategoryCounts(student.categoryCounts)}</div>`;
                     return `<tr>
                         <td class="semester-overview-student"><strong>${escapeHTML(student.name)}</strong><span>${escapeHTML(meta)}</span></td>
                         <td>${statusHtml}</td>
@@ -3427,7 +3490,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             paginationEl.classList.toggle('hidden', Number(pagination.total) === 0);
             const range = data.range || {};
             const counselorLabel = data.filters && data.filters.counselor ? data.filters.counselor : '全部個管老師';
-            statusEl.textContent = `查詢完成：${counselorLabel}｜${getSemesterOverviewPeriodLabel()}｜${formatSessionDate(range.startDate)}－${formatSessionDate(range.endDate)}，共 ${Number(pagination.total) || 0} 位學生。`;
+            const rosterSource = data.roster && data.roster.source === 'StudentTerms' ? '學期名冊' : 'Students 暫用名單';
+            statusEl.textContent = `查詢完成：${counselorLabel}｜${getSemesterOverviewPeriodLabel()}｜${formatSessionDate(range.startDate)}－${formatSessionDate(range.endDate)}｜原名冊 ${Number(summary.rosterStudents) || 0} 人｜排除 ${Number(summary.excludedStudents) || 0} 人｜納入統計 ${Number(summary.totalStudents) || 0} 人｜資料來源：${rosterSource}`;
         }
 
         async function executeAdminSemesterOverview(event, page = 1) {
@@ -3438,6 +3502,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             const counselorSelect = document.getElementById('admin-semester-overview-counselor');
             const statusSelect = document.getElementById('admin-semester-overview-filter');
             const excludeOneOnOne = document.getElementById('admin-semester-overview-exclude-one-on-one');
+            const excludeSpecial = document.getElementById('admin-semester-overview-exclude-special');
             const searchInput = document.getElementById('admin-semester-overview-search');
             const submitButton = document.getElementById('admin-semester-overview-submit');
             const statusEl = document.getElementById('admin-semester-overview-status');
@@ -3463,6 +3528,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     counselor: state.currentUserRole === 'staff' ? state.currentUserName : (counselorSelect ? counselorSelect.value : ''),
                     status: statusSelect ? statusSelect.value : 'all',
                     excludeOneOnOne: excludeOneOnOne ? excludeOneOnOne.checked : true,
+                    excludeSpecial: excludeSpecial ? excludeSpecial.checked : true,
                     search: searchInput ? searchInput.value.trim() : '',
                     page: state.adminSemesterOverviewPage,
                     adminAcc: state.adminCreds.acc,
@@ -3479,6 +3545,289 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     submitButton.disabled = false;
                     submitButton.innerHTML = '<i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>查詢';
                 }
+            }
+        }
+
+        function initializeAdminStudentTerms() {
+            if (state.adminStudentTermsInitialized) return;
+            if (state.currentUserRole !== 'admin') return;
+            state.adminStudentTermsInitialized = true;
+            const { year, month } = getTaipeiCalendarParts();
+            const academicWesternStart = month >= 8 ? year : year - 1;
+            const currentAcademicYear = academicWesternStart - 1911;
+            const yearSelect = document.getElementById('admin-student-terms-year');
+            if (yearSelect) {
+                yearSelect.innerHTML = '';
+                for (let academicYear = currentAcademicYear + 1; academicYear >= currentAcademicYear - 6; academicYear--) {
+                    const option = document.createElement('option');
+                    option.value = String(academicYear);
+                    option.textContent = `${academicYear}學年度`;
+                    option.selected = academicYear === currentAcademicYear;
+                    yearSelect.appendChild(option);
+                }
+            }
+            const semesterSelect = document.getElementById('admin-student-terms-semester');
+            if (semesterSelect) semesterSelect.value = (month >= 8 || month === 1) ? '1' : '2';
+            void loadAdminStudentTerms(1);
+        }
+
+        function getSelectedStudentTerm() {
+            const academicYear = Number(document.getElementById('admin-student-terms-year')?.value || 0);
+            const semester = Number(document.getElementById('admin-student-terms-semester')?.value || 0);
+            return { academicYear, semester };
+        }
+
+        function updateStudentTermExclusionControls(studentId) {
+            const checkbox = document.getElementById(`student-term-exclude-${studentId}`);
+            const reason = document.getElementById(`student-term-reason-${studentId}`);
+            const note = document.getElementById(`student-term-note-${studentId}`);
+            const enabled = Boolean(checkbox && checkbox.checked);
+            if (reason) reason.disabled = !enabled;
+            if (note) note.disabled = !enabled;
+        }
+
+        function renderAdminStudentTerms(data) {
+            const summary = data.summary || {};
+            const pagination = data.pagination || {};
+            const students = Array.isArray(data.students) ? data.students : [];
+            const reasons = Array.isArray(data.reasons) ? data.reasons : [];
+            const tbody = document.getElementById('admin-student-terms-tbody');
+            const summaryEl = document.getElementById('admin-student-terms-summary');
+            const paginationEl = document.getElementById('admin-student-terms-pagination');
+            const message = document.getElementById('admin-student-terms-message');
+            const initializeButton = document.getElementById('admin-student-terms-initialize');
+            const rolloverButton = document.getElementById('admin-student-terms-rollover');
+            if (!tbody || !summaryEl || !paginationEl || !message) return;
+
+            summaryEl.innerHTML = `
+                <div><span>本學期名冊</span><strong>${Number(summary.totalStudents) || 0}</strong><small>人</small></div>
+                <div><span>納入統計</span><strong>${Number(summary.includedStudents) || 0}</strong><small>人</small></div>
+                <div class="is-excluded"><span>不列入統計</span><strong>${Number(summary.excludedStudents) || 0}</strong><small>人</small></div>`;
+            summaryEl.classList.remove('hidden');
+            if (initializeButton) initializeButton.disabled = Number(summary.totalStudents) > 0;
+            if (rolloverButton) rolloverButton.disabled = Number(summary.totalStudents) === 0;
+
+            if (!students.length) {
+                const emptyText = Number(summary.totalStudents) > 0 ? '目前篩選條件下沒有學生' : '此學期尚未建立名冊';
+                tbody.innerHTML = `<tr><td colspan="5" class="student-terms-empty">${emptyText}</td></tr>`;
+            } else {
+                tbody.innerHTML = students.map(student => {
+                    const studentId = escapeHTML(student.studentId);
+                    const reasonOptions = reasons.map(reason => `<option value="${escapeHTML(reason)}" ${reason === student.exclusionReason ? 'selected' : ''}>${escapeHTML(reason)}</option>`).join('');
+                    return `<tr>
+                        <td class="student-terms-student"><strong>${escapeHTML(student.studentName)}</strong><span>${studentId}</span></td>
+                        <td><strong>${escapeHTML(student.className || '未填班級')}</strong><span class="student-terms-secondary">${escapeHTML(student.eduSystem || '未填學制')}</span></td>
+                        <td>${escapeHTML(student.counselor)}</td>
+                        <td><div class="student-term-row-control">
+                            <label><input id="student-term-exclude-${studentId}" type="checkbox" data-change-action="student-term-exclusion-toggle" data-student-id="${studentId}" ${student.excludeFromStats ? 'checked' : ''}>不列入統計</label>
+                            <select id="student-term-reason-${studentId}" ${student.excludeFromStats ? '' : 'disabled'} aria-label="${escapeHTML(student.studentName)}排除原因"><option value="">選擇原因</option>${reasonOptions}</select>
+                            <input id="student-term-note-${studentId}" type="text" maxlength="200" value="${escapeHTML(student.note || '')}" ${student.excludeFromStats ? '' : 'disabled'} placeholder="選擇其他時必填簡短說明" aria-label="${escapeHTML(student.studentName)}內部備註">
+                        </div></td>
+                        <td><button type="button" data-action="save-student-term-exclusion" data-student-id="${studentId}" class="student-term-save"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>儲存</button></td>
+                    </tr>`;
+                }).join('');
+            }
+
+            const page = Number(pagination.page) || 1;
+            const totalPages = Number(pagination.totalPages) || 1;
+            paginationEl.innerHTML = `<span>顯示 ${Number(pagination.total) || 0} 位學生</span><div>
+                <button type="button" data-action="student-terms-page" data-page="${page - 1}" ${page <= 1 ? 'disabled' : ''}><i class="fa-solid fa-chevron-left" aria-hidden="true"></i>上一頁</button>
+                <strong>${page}／${totalPages}</strong>
+                <button type="button" data-action="student-terms-page" data-page="${page + 1}" ${page >= totalPages ? 'disabled' : ''}>下一頁<i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>
+            </div>`;
+            paginationEl.classList.toggle('hidden', Number(pagination.total) === 0);
+            message.textContent = data.initialized
+                ? `已讀取 ${data.academicYear} 學年度第 ${data.semester} 學期名冊。若直接修改 Google 試算表，完成後請按「重新同步名冊」。`
+                : '尚未建立 StudentTerms 工作表，可按「從 Students 建立本學期名冊」。';
+        }
+
+        async function loadAdminStudentTerms(page = 1) {
+            if (!state.adminCreds || state.currentUserRole !== 'admin') return;
+            const { academicYear, semester } = getSelectedStudentTerm();
+            const filter = document.getElementById('admin-student-terms-filter')?.value || 'all';
+            const search = document.getElementById('admin-student-terms-search')?.value.trim() || '';
+            const tbody = document.getElementById('admin-student-terms-tbody');
+            const message = document.getElementById('admin-student-terms-message');
+            const queryButton = document.getElementById('admin-student-terms-query');
+            if (!academicYear || ![1, 2].includes(semester)) return;
+            state.adminStudentTermsPage = Math.max(1, Number(page) || 1);
+            if (queryButton) queryButton.disabled = true;
+            if (message) message.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> 正在讀取學期名冊…';
+            if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="student-terms-empty"><i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i>資料讀取中</td></tr>';
+            try {
+                const response = await apiRequest({
+                    action: 'getAdminStudentTermRoster',
+                    academicYear,
+                    semester,
+                    filter,
+                    search,
+                    page: state.adminStudentTermsPage,
+                    adminAcc: state.adminCreds.acc,
+                    adminToken: state.adminCreds.token
+                }, 30000);
+                if (checkTokenExpiration(response)) return;
+                if (!response.success) throw Object.assign(new Error(response.error || '名冊讀取失敗'), { code: response.code });
+                renderAdminStudentTerms(response.data);
+            } catch (error) {
+                if (message) message.textContent = getRequestErrorMessage(error, '學期名冊暫時無法讀取');
+                if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="student-terms-empty">資料載入失敗，請檢查 StudentTerms 欄位後重試。</td></tr>';
+            } finally {
+                if (queryButton) queryButton.disabled = false;
+            }
+        }
+
+        async function initializeStudentTermRoster() {
+            if (state.currentUserRole !== 'admin' || !state.adminCreds) return showToast('只有系統管理員可以建立學期名冊', 'error');
+            const { academicYear, semester } = getSelectedStudentTerm();
+            if (!window.confirm(`確定要從 Students 建立 ${academicYear} 學年度第 ${semester} 學期名冊嗎？\n此操作只會新增 StudentTerms，不會刪除 Students。`)) return;
+            showGlobalLoading(true, '正在批次建立學期名冊…');
+            try {
+                const response = await apiRequest({
+                    action: 'initializeAdminStudentTermRoster', academicYear, semester,
+                    adminAcc: state.adminCreds.acc, adminToken: state.adminCreds.token
+                }, 45000);
+                if (checkTokenExpiration(response)) return;
+                if (!response.success) throw Object.assign(new Error(response.error || '建立失敗'), { code: response.code });
+                showToast(`已建立 ${response.data.createdCount} 位學生的學期名冊`, 'success');
+                await loadAdminStudentTerms(1);
+            } catch (error) {
+                showToast(getRequestErrorMessage(error, '學期名冊建立失敗'), 'error');
+            } finally {
+                showGlobalLoading(false);
+            }
+        }
+
+        function clearStudentTermRolloverPreview() {
+            state.adminStudentTermsRolloverPlan = null;
+            const preview = document.getElementById('admin-student-terms-preview');
+            if (preview) {
+                preview.innerHTML = '';
+                preview.classList.add('hidden');
+            }
+        }
+
+        function renderStudentTermRolloverPreview(plan) {
+            const preview = document.getElementById('admin-student-terms-preview');
+            if (!preview) return;
+            const summary = plan.summary || {};
+            const reviewItems = (Array.isArray(plan.items) ? plan.items : [])
+                .filter(item => item.status === 'manual' || item.status === 'graduating')
+                .slice(0, 20);
+            const reviewHtml = reviewItems.length
+                ? `<p><strong>需注意：</strong>${reviewItems.map(item => `${escapeHTML(item.studentName)}（${escapeHTML(item.sourceClassName || '未填班級')}－${escapeHTML(item.statusLabel)}）`).join('、')}${(plan.items || []).filter(item => item.status === 'manual' || item.status === 'graduating').length > 20 ? '……' : ''}</p>`
+                : '<p>所有資料均可依既定規則處理。</p>';
+            const actionHtml = plan.targetExists
+                ? '<p><strong>下一學期名冊已存在，系統不會重複建立或覆蓋。</strong></p><div class="student-terms-preview-actions"><button type="button" data-action="cancel-student-term-rollover" class="is-cancel">關閉預覽</button></div>'
+                : '<div class="student-terms-preview-actions"><button type="button" data-action="commit-student-term-rollover" class="is-confirm">確認建立下一學期</button><button type="button" data-action="cancel-student-term-rollover" class="is-cancel">取消</button></div>';
+            preview.innerHTML = `<h3>${plan.source.academicYear}-${plan.source.semester} → ${plan.target.academicYear}-${plan.target.semester} 名冊預覽</h3>
+                <p>共 ${Number(summary.total) || 0} 人｜自動升級 ${Number(summary.promoted) || 0} 人｜直接沿用 ${Number(summary.carried) || 0} 人｜人工確認 ${Number(summary.manual) || 0} 人｜預計不帶入 ${Number(summary.graduating) || 0} 人｜將建立 ${Number(summary.willCreate) || 0} 人</p>
+                ${reviewHtml}
+                <p>人工確認者會先以原班級帶入；最高年級一般班不會帶入。新學期不會沿用舊學期的特殊排除設定。</p>
+                ${actionHtml}`;
+            preview.classList.remove('hidden');
+        }
+
+        async function previewStudentTermRollover() {
+            if (state.currentUserRole !== 'admin' || !state.adminCreds) return showToast('只有系統管理員可以建立下一學期名冊', 'error');
+            const { academicYear, semester } = getSelectedStudentTerm();
+            showGlobalLoading(true, '正在產生升級預覽…');
+            try {
+                const response = await apiRequest({
+                    action: 'previewAdminStudentTermRollover', academicYear, semester,
+                    adminAcc: state.adminCreds.acc, adminToken: state.adminCreds.token
+                }, 30000);
+                if (checkTokenExpiration(response)) return;
+                if (!response.success) throw Object.assign(new Error(response.error || '預覽失敗'), { code: response.code });
+                state.adminStudentTermsRolloverPlan = response.data;
+                renderStudentTermRolloverPreview(response.data);
+            } catch (error) {
+                showToast(getRequestErrorMessage(error, '下一學期名冊預覽失敗'), 'error');
+            } finally {
+                showGlobalLoading(false);
+            }
+        }
+
+        async function commitStudentTermRollover() {
+            const plan = state.adminStudentTermsRolloverPlan;
+            if (!plan || !state.adminCreds || state.currentUserRole !== 'admin') return;
+            if (!window.confirm(`確定建立 ${plan.target.academicYear} 學年度第 ${plan.target.semester} 學期名冊嗎？`)) return;
+            showGlobalLoading(true, '正在批次建立下一學期名冊…');
+            try {
+                const response = await apiRequest({
+                    action: 'commitAdminStudentTermRollover',
+                    academicYear: plan.source.academicYear,
+                    semester: plan.source.semester,
+                    adminAcc: state.adminCreds.acc,
+                    adminToken: state.adminCreds.token
+                }, 45000);
+                if (checkTokenExpiration(response)) return;
+                if (!response.success) throw Object.assign(new Error(response.error || '建立失敗'), { code: response.code });
+                clearStudentTermRolloverPreview();
+                const yearSelect = document.getElementById('admin-student-terms-year');
+                const semesterSelect = document.getElementById('admin-student-terms-semester');
+                if (yearSelect) yearSelect.value = String(response.data.target.academicYear);
+                if (semesterSelect) semesterSelect.value = String(response.data.target.semester);
+                showToast(`已建立下一學期名冊，共 ${response.data.willCreate} 人`, 'success');
+                await loadAdminStudentTerms(1);
+            } catch (error) {
+                showToast(getRequestErrorMessage(error, '下一學期名冊建立失敗'), 'error');
+            } finally {
+                showGlobalLoading(false);
+            }
+        }
+
+        async function saveStudentTermExclusion(studentId) {
+            if (!studentId || !state.adminCreds || state.currentUserRole !== 'admin') return;
+            const checkbox = document.getElementById(`student-term-exclude-${studentId}`);
+            const reason = document.getElementById(`student-term-reason-${studentId}`);
+            const note = document.getElementById(`student-term-note-${studentId}`);
+            const excludeFromStats = Boolean(checkbox && checkbox.checked);
+            const exclusionReason = reason ? reason.value : '';
+            const noteText = note ? note.value.trim() : '';
+            if (excludeFromStats && !exclusionReason) return showToast('請選擇排除原因', 'error');
+            if (excludeFromStats && exclusionReason === '其他' && !noteText) return showToast('選擇其他時必須填寫簡短說明', 'error');
+            const { academicYear, semester } = getSelectedStudentTerm();
+            showGlobalLoading(true, '正在儲存統計設定…');
+            try {
+                const response = await apiRequest({
+                    action: 'saveAdminStudentTermExclusion', academicYear, semester, studentId,
+                    excludeFromStats, exclusionReason, note: noteText,
+                    adminAcc: state.adminCreds.acc, adminToken: state.adminCreds.token
+                }, 25000);
+                if (checkTokenExpiration(response)) return;
+                if (!response.success) throw Object.assign(new Error(response.error || '儲存失敗'), { code: response.code });
+                showToast('學期統計設定已儲存', 'success');
+                await loadAdminStudentTerms(state.adminStudentTermsPage);
+            } catch (error) {
+                showToast(getRequestErrorMessage(error, '統計設定儲存失敗'), 'error');
+            } finally {
+                showGlobalLoading(false);
+            }
+        }
+
+        async function refreshStudentTermRoster() {
+            if (!state.adminCreds || state.currentUserRole !== 'admin') return;
+            const { academicYear, semester } = getSelectedStudentTerm();
+            showGlobalLoading(true, '正在驗證並重新同步學期名冊…');
+            try {
+                const response = await apiRequest({
+                    action: 'refreshAdminStudentTermRoster',
+                    academicYear,
+                    semester,
+                    adminAcc: state.adminCreds.acc,
+                    adminToken: state.adminCreds.token
+                }, 30000);
+                if (checkTokenExpiration(response)) return;
+                if (!response.success) throw Object.assign(new Error(response.error || '同步失敗'), { code: response.code });
+                const syncMessage = response.data.syncedToStudents
+                    ? `；目前學期已同步更新 Students ${response.data.syncedStudents} 人`
+                    : '；這是舊學期，因此不會覆蓋目前的 Students 資料';
+                showToast(`名冊同步完成，本學期 ${response.data.termStudents} 人${syncMessage}`, 'success');
+                await loadAdminStudentTerms(state.adminStudentTermsPage);
+            } catch (error) {
+                showToast(getRequestErrorMessage(error, '名冊同步失敗'), 'error');
+            } finally {
+                showGlobalLoading(false);
             }
         }
 

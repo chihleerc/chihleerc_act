@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 致理．心夥伴 - 活動報名系統｜學期活動參與概況版 V11.21.24｜2026-10-29 -->
+<!-- 致理．心夥伴 - 活動報名系統｜學期名冊管理版 V11.21.25｜2026-10-30 -->
 <html lang="zh-TW" class="frame-guard-pending">
 <head>
     <meta charset="UTF-8">
@@ -213,6 +213,7 @@
                     <button type="button" data-action="load-admin-dashboard"><i class="fa-solid fa-list-check" aria-hidden="true"></i><span>管理活動與報名</span><small>需要時才載入完整清單</small></button>
                     <button type="button" data-action="open-student-registration-lookup"><i class="fa-solid fa-user-check" aria-hidden="true"></i><span>查詢學生報名</span><small>依學號與日期區間查詢</small></button>
                     <button type="button" data-action="open-semester-overview"><i class="fa-solid fa-chart-column" aria-hidden="true"></i><span>學期報名概況</span><small>查看個管學生已報名與未報名情形</small></button>
+                    <button type="button" data-action="open-student-term-roster" class="admin-only-student-terms hidden"><i class="fa-solid fa-users-gear" aria-hidden="true"></i><span>學期名冊管理</span><small>批次建立名冊與設定統計排除</small></button>
                 </div>
             </section>
 
@@ -220,6 +221,7 @@
                 <button id="tabActivityList" data-action="switch-admin-tab" data-tab="list" class="font-bold text-gray-800 border-b-2 border-chihlee-blue pb-1 px-2 transition text-sm md:text-base">活動列表</button>
                 <button id="tabStudentLookup" data-action="switch-admin-tab" data-tab="studentLookup" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">學生報名查詢</button>
                 <button id="tabSemesterOverview" data-action="switch-admin-tab" data-tab="semesterOverview" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">學期報名概況</button>
+                <button id="tabStudentTerms" data-action="switch-admin-tab" data-tab="studentTerms" class="admin-only-student-terms hidden text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">學期名冊管理</button>
                 <button id="tabActivityLog" data-action="switch-admin-tab" data-tab="log" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">動態紀錄</button>
                 <button id="tabDataQuality" data-action="switch-admin-tab" data-tab="quality" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">資料檢查</button>
             </div>
@@ -332,7 +334,7 @@
                 </div>
             </div>
 
-            <!-- 學期報名概況：以 Students 名冊為母體，按需比對指定區間的實際參加場次。 -->
+            <!-- 學期報名概況：優先使用 StudentTerms 學期名冊，未建立時相容性退回 Students。 -->
             <div id="adminSemesterOverviewSection" class="hidden w-full">
                 <div class="semester-overview-panel">
                     <div class="semester-overview-heading">
@@ -376,6 +378,10 @@
                             <input id="admin-semester-overview-exclude-one-on-one" type="checkbox" checked>
                             <span>排除一對一諮詢</span>
                         </label>
+                        <label class="semester-overview-checkbox">
+                            <input id="admin-semester-overview-exclude-special" type="checkbox" checked>
+                            <span>排除本學期不列入統計學生</span>
+                        </label>
                         <label class="semester-overview-field semester-overview-search">
                             <span>搜尋學生</span>
                             <input id="admin-semester-overview-search" type="search" maxlength="50" autocomplete="off" placeholder="姓名、學號或班級">
@@ -391,6 +397,40 @@
                         </table>
                     </div>
                     <div id="admin-semester-overview-pagination" class="semester-overview-pagination hidden"></div>
+                </div>
+            </div>
+
+            <!-- 學期名冊管理：僅系統管理員可使用，資料按需載入。 -->
+            <div id="adminStudentTermsSection" class="hidden w-full">
+                <div class="student-terms-panel">
+                    <div class="student-terms-heading">
+                        <div>
+                            <h2><i class="fa-solid fa-users-gear" aria-hidden="true"></i>學期名冊管理</h2>
+                            <p>每學期名冊獨立保存；可直接在 Google 試算表批次修改後再重新同步。</p>
+                        </div>
+                    </div>
+                    <form id="admin-student-terms-form" data-submit-action="admin-student-terms" class="student-terms-toolbar" novalidate>
+                        <label><span>學年度</span><select id="admin-student-terms-year" data-change-action="student-terms-selection"></select></label>
+                        <label><span>學期</span><select id="admin-student-terms-semester" data-change-action="student-terms-selection"><option value="1">第1學期</option><option value="2">第2學期</option></select></label>
+                        <label><span>統計狀態</span><select id="admin-student-terms-filter"><option value="all">全部學生</option><option value="included">納入統計</option><option value="excluded">不列入統計</option></select></label>
+                        <label class="student-terms-search"><span>搜尋</span><input id="admin-student-terms-search" type="search" maxlength="50" placeholder="姓名、學號、班級或個管"></label>
+                        <button id="admin-student-terms-query" type="submit" class="student-terms-primary"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>查詢</button>
+                    </form>
+                    <div class="student-terms-actions">
+                        <button id="admin-student-terms-initialize" type="button" data-action="initialize-student-term-roster"><i class="fa-solid fa-file-import" aria-hidden="true"></i>從 Students 建立本學期名冊</button>
+                        <button id="admin-student-terms-rollover" type="button" data-action="preview-student-term-rollover"><i class="fa-solid fa-arrow-right-arrow-left" aria-hidden="true"></i>建立下一學期名冊</button>
+                        <button type="button" data-action="refresh-student-term-roster"><i class="fa-solid fa-rotate" aria-hidden="true"></i>重新同步名冊</button>
+                    </div>
+                    <div id="admin-student-terms-message" class="student-terms-message" role="status" aria-live="polite">請選擇學年度與學期後查詢。</div>
+                    <div id="admin-student-terms-summary" class="student-terms-summary hidden"></div>
+                    <div id="admin-student-terms-preview" class="student-terms-preview hidden"></div>
+                    <div class="student-terms-table-wrap custom-scroll">
+                        <table class="student-terms-table">
+                            <thead><tr><th>學生</th><th>學制／班級</th><th>個管老師</th><th>本學期統計設定</th><th>操作</th></tr></thead>
+                            <tbody id="admin-student-terms-tbody"><tr><td colspan="5" class="student-terms-empty">尚未查詢</td></tr></tbody>
+                        </table>
+                    </div>
+                    <div id="admin-student-terms-pagination" class="student-terms-pagination hidden"></div>
                 </div>
             </div>
 
