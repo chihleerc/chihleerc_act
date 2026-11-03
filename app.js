@@ -6,6 +6,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             tempTags: [], tempSessions: [], tempImages: [], tempImagesChanged: false, pendingEventCreateId: '', pendingAdminRegistrationId: '', adminCurrentPage: 1, editingRegId: null,
             events: [], eventStats: {}, counselors: [], counselorsLoaded: false, registrations: [], admins: [], logs: [], adminCreds: null, adminAddTempStudent: null, myRegistrations: [],
             lineUsage: { month: '', used: 0, limit: 200, remaining: 200 }, dataQualityReport: null, archivePreview: null,
+            lineDraftTimer: null, currentLineTemplateType: 'pre_event',
             studentIdentity: null, registeredEventIds: [], pendingRegistrationIds: {},
             eventCounts: new Map(), calendarYear: null, calendarMonth: null, calendarSelectedDate: '',
             publicPage: 0, publicHasMore: false, publicTotal: 0, publicCategoryCounts: {}, publicLoadingMore: false,
@@ -22,6 +23,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         function markDirty() { isFormDirty = true; }
         function resetDirty() { isFormDirty = false; }
         window.addEventListener('beforeunload', function (e) { if (isFormDirty) { e.preventDefault(); e.returnValue = ''; } });
+        window.addEventListener('beforeunload', flushLineDraftAutosave);
+        window.addEventListener('pagehide', flushLineDraftAutosave);
 
         function enhanceAccessibility() {
             document.querySelectorAll('[id^="modal-"]').forEach(modal => {
@@ -50,6 +53,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             if (event.key === 'Escape') {
                 if (modal.id === 'modal-edit-event') safeCloseEditEvent();
                 else if (modal.id === 'modal-remark') safeCloseRemark();
+                else if (modal.id === 'modal-notify') closeNotifyModal();
                 else closeModal(modal.id);
                 return;
             }
@@ -180,7 +184,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 'save-student-term-exclusion': () => saveStudentTermExclusion(target.dataset.studentId || ''),
                 'open-edit-event': () => openEditEventModal(eventId || undefined),
                 'choose-event-images': () => document.getElementById('edit-images-input').click(),
-                'close-modal': () => closeModal(target.dataset.modal),
+                'close-modal': () => closeManagedModal(target.dataset.modal),
                 'close-query': () => closeQueryModalSafe(),
                 'execute-student-query': () => executeStudentQuery(),
                 'expand-query-controls': () => expandQueryControls(),
@@ -241,6 +245,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 } else renderTeacherDashboard(1);
             }
             if (target.dataset.inputAction === 'mark-dirty') markDirty();
+            if (target.dataset.inputAction === 'line-draft-autosave') scheduleLineDraftAutosave();
         });
 
         document.addEventListener('change', event => {
@@ -253,7 +258,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             }
             else if (action === 'mark-dirty') markDirty();
             else if (action === 'activity-type') { handleActivityTypeChange(); markDirty(); }
-            else if (action === 'line-template') changeLineTemplate();
+            else if (action === 'line-template') changeLineTemplate(target.value);
             else if (action === 'toggle-event-selection') toggleEventSelection(target.dataset.eventId, target.checked);
             else if (action === 'registration-session') handleRegSessionChange(target.dataset.eventId, Number(target.dataset.index), target.dataset.singleChoice === 'true', target);
             else if (action === 'admin-add-session') handleAdminAddSessionChange_(target);
@@ -507,9 +512,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         // 固定記錄這一版完成修改的時間，不會因登入、重新整理或查詢資料而改變。
-        const VERSION_LABEL = 'V11.21.25';
-        const VERSION_UPDATED_AT = '2026/10/30 08:48';
-        const VERSION_UPDATED_AT_ISO = '2026-10-30T08:48:00+08:00';
+        const VERSION_LABEL = 'V11.21.26';
+        const VERSION_UPDATED_AT = '2026/11/02 09:30';
+        const VERSION_UPDATED_AT_ISO = '2026-11-02T09:30:00+08:00';
         const API_TIMEOUT_MS = 20000;
         const LOGIN_TIMEOUT_MS = 25000;
         const ADMIN_DATA_TIMEOUT_MS = 45000;
@@ -850,6 +855,16 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             const focusTarget = modalFocusHistory.get(id);
             modalFocusHistory.delete(id);
             if (focusTarget && document.contains(focusTarget)) focusTarget.focus();
+        }
+
+        function closeNotifyModal() {
+            flushLineDraftAutosave();
+            closeModal('modal-notify');
+        }
+
+        function closeManagedModal(id) {
+            if (id === 'modal-notify') closeNotifyModal();
+            else closeModal(id);
         }
 
         function checkTokenExpiration(res) {
@@ -2193,6 +2208,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         async function logoutTeacher() {
+            flushLineDraftAutosave();
             const credentials = state.adminCreds;
             if (credentials && credentials.acc && credentials.token) {
                 try {
@@ -5338,8 +5354,140 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             return `${safeMessage}\n\n📅 活動場次：\n${LINE_SESSION_PLACEHOLDER}`.trim();
         }
 
+        const LINE_DRAFT_STORAGE_PREFIX = 'chihlee_line_draft_v112126_';
+        const LEGACY_LINE_DRAFT_STORAGE_PREFIX = 'chihlee_line_draft_';
+
+        function getLineDraftStorageKey(eventId, type, legacy = false) {
+            const prefix = legacy ? LEGACY_LINE_DRAFT_STORAGE_PREFIX : LINE_DRAFT_STORAGE_PREFIX;
+            return `${prefix}${String(eventId || '')}_${String(type || '')}`;
+        }
+
+        function writeLineDraftToStorage(eventId, type, text) {
+            const updatedAt = new Date().toISOString();
+            try {
+                localStorage.setItem(
+                    getLineDraftStorageKey(eventId, type),
+                    JSON.stringify({ text: String(text == null ? '' : text), updatedAt })
+                );
+                return { success: true, updatedAt };
+            } catch (error) {
+                console.error('LINE 文案暫存失敗', error);
+                return { success: false, updatedAt: '' };
+            }
+        }
+
+        function readLineDraftFromStorage(eventId, type) {
+            try {
+                const stored = localStorage.getItem(getLineDraftStorageKey(eventId, type));
+                if (stored !== null) {
+                    try {
+                        const parsed = JSON.parse(stored);
+                        if (parsed && typeof parsed.text === 'string') {
+                            return { found: true, text: parsed.text, updatedAt: String(parsed.updatedAt || '') };
+                        }
+                    } catch (error) {
+                        return { found: true, text: stored, updatedAt: '' };
+                    }
+                }
+
+                // 將 V11.21.25 的分頁暫存稿搬到可跨重新登入保留的 localStorage。
+                const legacyKey = getLineDraftStorageKey(eventId, type, true);
+                const legacyDraft = sessionStorage.getItem(legacyKey);
+                if (legacyDraft !== null) {
+                    const migrated = writeLineDraftToStorage(eventId, type, legacyDraft);
+                    if (migrated.success) sessionStorage.removeItem(legacyKey);
+                    return { found: true, text: legacyDraft, updatedAt: migrated.updatedAt };
+                }
+                return { found: false, text: '', updatedAt: '' };
+            } catch (error) {
+                console.error('LINE 文案暫存讀取失敗', error);
+                return { found: false, text: '', updatedAt: '', storageError: true };
+            }
+        }
+
+        function removeLineDraftFromStorage(eventId, type) {
+            try {
+                localStorage.removeItem(getLineDraftStorageKey(eventId, type));
+                sessionStorage.removeItem(getLineDraftStorageKey(eventId, type, true));
+                return true;
+            } catch (error) {
+                console.error('LINE 文案暫存清除失敗', error);
+                return false;
+            }
+        }
+
+        function formatLineDraftSavedTime(value) {
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '';
+            return date.toLocaleTimeString('zh-TW', {
+                timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hour12: false
+            });
+        }
+
+        function updateLineDraftStatus(mode, updatedAt = '') {
+            const loaded = document.getElementById('line-draft-warning');
+            const hint = document.getElementById('line-draft-hint');
+            if (!loaded || !hint) return;
+            const savedTime = formatLineDraftSavedTime(updatedAt);
+            loaded.classList.add('hidden');
+            hint.classList.remove('hidden');
+            if (mode === 'loaded') {
+                loaded.innerHTML = `<i class="fa-solid fa-clock-rotate-left mr-1" aria-hidden="true"></i>已載入自動暫存${savedTime ? `（${savedTime}）` : ''}`;
+                loaded.classList.remove('hidden');
+                hint.classList.add('hidden');
+            } else if (mode === 'saving') {
+                hint.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1" aria-hidden="true"></i>正在自動暫存…';
+            } else if (mode === 'saved') {
+                hint.innerHTML = `<i class="fa-solid fa-cloud-arrow-up mr-1" aria-hidden="true"></i>已自動儲存${savedTime ? ` ${savedTime}` : ''}`;
+            } else if (mode === 'error') {
+                hint.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-1" aria-hidden="true"></i>暫存失敗，請確認瀏覽器未停用網站儲存空間';
+            } else {
+                hint.innerHTML = '<i class="fa-solid fa-cloud-arrow-up mr-1" aria-hidden="true"></i>輸入後會自動暫存';
+            }
+        }
+
+        function formatLineFeedbackDate(dateValue) {
+            const normalized = String(dateValue || '').trim().replace(/\//g, '-');
+            const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!match) return '';
+            return `${Number(match[2])}月${Number(match[3])}日${getDayOfWeek(normalized).replace('(', '（').replace(')', '）')}`;
+        }
+
+        function buildLineFeedbackDateLabel(ev) {
+            const dates = Array.from(new Set(
+                (Array.isArray(ev && ev.sessions) ? ev.sessions : [])
+                    .map(session => String(session && session.date || '').trim().replace(/\//g, '-'))
+                    .filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date))
+            )).sort();
+            if (!dates.length) return '';
+            const first = formatLineFeedbackDate(dates[0]);
+            if (dates.length === 1) return first;
+            const last = formatLineFeedbackDate(dates[dates.length - 1]);
+            return first === last ? first : `${first}至${last}`;
+        }
+
+        function buildDefaultLineTemplate(ev, type) {
+            const sessionsStr = buildEventLineSessionBlock(ev) || '活動時間與地點待確認';
+            if (type === 'pre_event') {
+                const isPersonalized = requiresPersonalizedLineSessions(ev, type);
+                const sessionLabel = ev.isOneOnOne ? '預約時間與地點' : (isPersonalized ? '參與場次' : '活動時間與地點');
+                const sessionContent = isPersonalized ? LINE_SESSION_PLACEHOLDER : sessionsStr;
+                const mealSurvey = ev.hasMeal || ev.hasSnack
+                    ? '\n\n🍽️ 餐點調查\n菜單網址：[請填寫]\n回覆期限：[請填寫]\n\n餐點選項：\n[請依本次餐點內容填寫]'
+                    : '';
+                return `【致理科大資源教室 活動提醒】\n同學您好！提醒您有報名以下活動：\n\n📌 活動名稱：${ev.title}\n📅 ${sessionLabel}：\n${sessionContent}${mealSurvey}\n\n💡 小提醒：若需更改時間或臨時不克前來，請直接聯繫個管老師喔！期待您的參與！`;
+            }
+            if (type === 'feedback') {
+                const dateLabel = buildLineFeedbackDateLabel(ev);
+                return `【致理科大資源教室 滿意度調查】\n感謝您參與${dateLabel ? dateLabel : ''}「${ev.title}」。\n為了提供更好的活動品質，邀請您花 1 分鐘填寫回饋問卷：\n👉 [請貼上問卷網址]\n\n請都給我們【進步非常多】&【非常滿意】唷～`;
+            }
+            return `【致理科大資源教室 通知】\n同學您好：\n\n（請在此輸入內容）`;
+        }
+
         window.openNotifyModal = function(eventId) {
             try {
+                // 若上一個活動的推播視窗尚有未寫入的內容，先以原活動 ID 完成暫存。
+                flushLineDraftAutosave();
                 const safeEventId = String(eventId);
                 state.currentAdminEventId = safeEventId;
                 const ev = state.events.find(e => String(e.id) === safeEventId);
@@ -5351,7 +5499,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
 
                 const templateSelect = document.getElementById('line-template-select');
                 if (templateSelect) templateSelect.value = 'pre_event';
-                changeLineTemplate();
+                state.currentLineTemplateType = 'pre_event';
+                changeLineTemplate('pre_event', { skipSave: true });
 
                 const parts = state.registrations.filter(r => String(r.eventId) === safeEventId);
                 const tbody = document.getElementById('notify-tbody');
@@ -5388,15 +5537,80 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             }
         };
 
-        function changeLineTemplate() {
-            const type = document.getElementById('line-template-select').value;
+        function persistLineDraft(type = state.currentLineTemplateType, options = {}) {
+            if (state.lineDraftTimer) {
+                clearTimeout(state.lineDraftTimer);
+                state.lineDraftTimer = null;
+            }
+            if (!state.currentAdminEventId || !type) return false;
+
+            const ev = state.events.find(e => String(e.id) === String(state.currentAdminEventId));
+            const textarea = document.getElementById('line-preview-text');
+            if (!ev || !textarea) return false;
+
+            const text = requiresPersonalizedLineSessions(ev, type)
+                ? ensureLineSessionPlaceholder(textarea.value)
+                : textarea.value;
+            if (type === state.currentLineTemplateType) textarea.value = text;
+
+            const result = writeLineDraftToStorage(state.currentAdminEventId, type, text);
+            if (result.success) {
+                textarea.dataset.draftDirty = 'false';
+                updateLineDraftStatus('saved', result.updatedAt);
+                const clearBtn = document.getElementById('btn-clear-line-draft');
+                if (clearBtn) {
+                    clearBtn.classList.remove('hidden');
+                    clearBtn.classList.add('flex');
+                }
+                if (options.manual === true) showToast('文案已儲存', 'success');
+                return true;
+            }
+            updateLineDraftStatus('error');
+            if (options.manual === true) showToast('暫存失敗，請確認瀏覽器儲存空間設定', 'error');
+            return false;
+        }
+
+        function scheduleLineDraftAutosave() {
+            const textarea = document.getElementById('line-preview-text');
+            if (!textarea || !state.currentAdminEventId) return;
+            textarea.dataset.draftDirty = 'true';
+            updateLineDraftStatus('saving');
+            if (state.lineDraftTimer) clearTimeout(state.lineDraftTimer);
+            state.lineDraftTimer = setTimeout(() => {
+                persistLineDraft(state.currentLineTemplateType);
+            }, 650);
+        }
+
+        function flushLineDraftAutosave() {
+            const textarea = document.getElementById('line-preview-text');
+            if (!textarea || textarea.dataset.draftDirty !== 'true') {
+                if (state.lineDraftTimer) {
+                    clearTimeout(state.lineDraftTimer);
+                    state.lineDraftTimer = null;
+                }
+                return;
+            }
+            persistLineDraft(state.currentLineTemplateType);
+        }
+
+        function changeLineTemplate(requestedType, options = {}) {
+            const templateSelect = document.getElementById('line-template-select');
+            const textarea = document.getElementById('line-preview-text');
+            if (!templateSelect || !textarea) return;
+
+            // 下拉選單變更時，DOM 已是新值；仍需以記錄中的舊類型保存原文案。
+            if (options.skipSave !== true && state.currentLineTemplateType && textarea.dataset.draftDirty === 'true') {
+                persistLineDraft(state.currentLineTemplateType);
+            }
+
+            const type = requestedType || templateSelect.value || 'pre_event';
+            templateSelect.value = type;
+            state.currentLineTemplateType = type;
             const ev = state.events.find(e => String(e.id) === String(state.currentAdminEventId));
             if (!ev) return;
 
-            const textarea = document.getElementById('line-preview-text');
             const clearBtn = document.getElementById('btn-clear-line-draft');
             const personalizationHint = document.getElementById('line-personalization-hint');
-            const sessionsStr = buildEventLineSessionBlock(ev);
             const isPersonalizedPreEvent = requiresPersonalizedLineSessions(ev, type);
 
             if (personalizationHint) {
@@ -5410,57 +5624,43 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 }
             }
 
-            const savedDraft = sessionStorage.getItem(`chihlee_line_draft_${ev.id}_${type}`);
-
-            if (savedDraft) {
-                textarea.value = isPersonalizedPreEvent ? ensureLineSessionPlaceholder(savedDraft) : savedDraft;
+            const savedDraft = readLineDraftFromStorage(ev.id, type);
+            if (savedDraft.found) {
+                textarea.value = isPersonalizedPreEvent ? ensureLineSessionPlaceholder(savedDraft.text) : savedDraft.text;
                 clearBtn.classList.remove('hidden');
                 clearBtn.classList.add('flex');
-                document.getElementById('line-draft-warning').classList.remove('hidden');
-                document.getElementById('line-draft-hint').classList.add('hidden');
+                updateLineDraftStatus('loaded', savedDraft.updatedAt);
             } else {
                 clearBtn.classList.remove('flex');
                 clearBtn.classList.add('hidden');
-                document.getElementById('line-draft-warning').classList.add('hidden');
-                document.getElementById('line-draft-hint').classList.remove('hidden');
-
-                if (type === 'pre_event') {
-                    if (isPersonalizedPreEvent) {
-                        const sessionLabel = ev.isOneOnOne ? '預約時間與地點' : '參與場次';
-                        textarea.value = `【致理科大資源教室 活動提醒】\n同學您好！提醒您有報名以下活動：\n\n📌 活動名稱：${ev.title}\n📅 ${sessionLabel}：\n${LINE_SESSION_PLACEHOLDER}\n\n💡 小提醒：若需更改時間或臨時不克前來，請直接聯繫個管老師喔！期待您的參與！`;
-                    } else {
-                        textarea.value = `【致理科大資源教室 活動提醒】\n同學您好！提醒您有報名以下活動：\n\n📌 活動名稱：${ev.title}\n📅 活動時間與地點：\n${sessionsStr}\n\n💡 小提醒：請留意當天是否有供餐，若有用餐需求變更或臨時不克前來，請直接聯繫個管老師喔！期待您的參與！`;
-                    }
-                } else if (type === 'feedback') {
-                    textarea.value = `【致理科大資源教室 滿意度調查】\n同學您好！感謝您參與「${ev.title}」。\n\n為了提供更好的活動品質，邀請您花 1 分鐘填寫回饋問卷：\n👉 [請貼上問卷網址]\n\n您的寶貴意見是我們進步的動力，謝謝您！`;
-                } else if (type === 'custom') {
-                    textarea.value = `【致理科大資源教室 通知】\n同學您好：\n\n（請在此輸入內容）`;
-                }
+                textarea.value = buildDefaultLineTemplate(ev, type);
+                updateLineDraftStatus(savedDraft.storageError ? 'error' : 'default');
             }
+            textarea.dataset.draftDirty = 'false';
         }
 
         function saveLineDraft() {
-            if (!state.currentAdminEventId) return;
-            const type = document.getElementById('line-template-select').value;
-            const ev = state.events.find(e => String(e.id) === String(state.currentAdminEventId));
-            const rawText = document.getElementById('line-preview-text').value;
-            const text = requiresPersonalizedLineSessions(ev, type) ? ensureLineSessionPlaceholder(rawText) : rawText;
-            document.getElementById('line-preview-text').value = text;
-            sessionStorage.setItem(`chihlee_line_draft_${state.currentAdminEventId}_${type}`, text);
-            const typeName = document.getElementById('line-template-select').options[document.getElementById('line-template-select').selectedIndex].text;
-            showToast(`已暫存「${typeName.replace('📝 ', '').replace('⭐ ', '').replace('✏️ ', '')}」！`, 'success');
-            changeLineTemplate();
+            persistLineDraft(state.currentLineTemplateType, { manual: true });
         }
 
         function clearLineDraft() {
             if (!state.currentAdminEventId) return;
-            const type = document.getElementById('line-template-select').value;
-            sessionStorage.removeItem(`chihlee_line_draft_${state.currentAdminEventId}_${type}`);
+            if (state.lineDraftTimer) {
+                clearTimeout(state.lineDraftTimer);
+                state.lineDraftTimer = null;
+            }
+            const type = state.currentLineTemplateType || document.getElementById('line-template-select').value;
+            if (!removeLineDraftFromStorage(state.currentAdminEventId, type)) {
+                return showToast('暫存清除失敗，請確認瀏覽器設定', 'error');
+            }
+            const textarea = document.getElementById('line-preview-text');
+            if (textarea) textarea.dataset.draftDirty = 'false';
             showToast('已清除暫存，恢復預設', 'info');
-            changeLineTemplate();
+            changeLineTemplate(type, { skipSave: true });
         }
 
         function confirmSendLine() {
+            flushLineDraftAutosave();
             const selectedCount = document.querySelectorAll('.notify-checkbox:checked').length;
             const message = document.getElementById('line-preview-text').value.trim();
             const notifyType = document.getElementById('line-template-select').value;
