@@ -2280,7 +2280,7 @@
         .semester-overview-summary .is-rate { background: #fff9e8; border-color: #edd998; }
         .semester-overview-summary .is-rate strong { color: #956700; }
 
-        /* V11.21.28｜個管登入摘要與管理員參與分析 */
+        /* V11.21.29｜個管登入摘要、管理員參與分析與 SVG 圓環相容修正 */
         .participation-analytics {
             margin: 0 1.4rem 1rem;
             padding: 1rem;
@@ -2343,16 +2343,28 @@
             position: relative;
             width: 7.4rem;
             height: 7.4rem;
-            border-radius: 50%;
-            background: conic-gradient(#0864bd var(--participation-rate), #e2e9f0 0);
         }
-        .participation-ring::after {
+        .participation-ring-svg {
             position: absolute;
-            inset: .9rem;
-            content: '';
-            background: #fff;
-            border-radius: 50%;
+            inset: 0;
+            display: block;
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+            transform: rotate(-90deg);
         }
+        .participation-ring-track,
+        .participation-ring-progress {
+            fill: none;
+            stroke-width: 14;
+            vector-effect: non-scaling-stroke;
+        }
+        .participation-ring-track { stroke: #e2e9f0; }
+        .participation-ring-progress {
+            stroke: #0864bd;
+            stroke-linecap: round;
+        }
+        .participation-ring-progress.is-empty { display: none; }
         .participation-ring-content {
             position: absolute;
             z-index: 1;
