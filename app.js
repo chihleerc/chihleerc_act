@@ -523,7 +523,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         // 固定記錄這一版完成修改的時間，不會因登入、重新整理或查詢資料而改變。
-        const VERSION_LABEL = 'V11.21.31';
+        const VERSION_LABEL = 'V11.21.32';
         const VERSION_UPDATED_AT = '2026/11/05 18:26';
         const VERSION_UPDATED_AT_ISO = '2026-11-05T18:26:00+08:00';
         const API_TIMEOUT_MS = 20000;
@@ -3486,7 +3486,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             </div>`;
         }
 
-        function renderParticipationGroup(title, iconClass, group, shareLabel) {
+        function renderParticipationGroup(title, iconClass, group, shareLabel, countDescription) {
             const data = group && typeof group === 'object' ? group : {};
             const rate = clampParticipationPercent(data.participationRate);
             const participants = Math.max(0, Number(data.participants) || 0);
@@ -3499,14 +3499,14 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             return `<section class="participation-group">
                 <h3><i class="${iconClass}" aria-hidden="true"></i>${title}</h3>
                 <div class="participation-group-overview">
-                    <div class="participation-ring" role="img" aria-label="${title}整體參與率 ${formatParticipationPercent(rate)}%">
+                    <div class="participation-ring" role="img" aria-label="${title} ${formatParticipationPercent(rate)}%">
                         <svg class="participation-ring-svg" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
                             <circle class="participation-ring-track" cx="60" cy="60" r="50"></circle>
                             <circle class="participation-ring-progress${rate <= 0 ? ' is-empty' : ''}" cx="60" cy="60" r="50" stroke-dasharray="${ringDash.toFixed(3)} ${ringGap.toFixed(3)}"></circle>
                         </svg>
-                        <div class="participation-ring-content"><strong>${formatParticipationPercent(rate)}%</strong><span>整體參與率</span></div>
+                        <div class="participation-ring-content"><strong>${formatParticipationPercent(rate)}%</strong></div>
                     </div>
-                    <div class="participation-count"><strong>${participants}／${denominator} 人</strong><span>${title === '活動' ? '至少參加一場活動' : '至少接受一次個別服務'}</span></div>
+                    <div class="participation-count"><strong>${participants}／${denominator} 人</strong><span>${countDescription}</span></div>
                 </div>
                 <div class="participation-categories">
                     ${renderParticipationCategory('人際', 'is-interpersonal', categories['人際'])}
@@ -3515,6 +3515,19 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 </div>
                 ${share == null ? '' : `<div class="participation-share"><div class="participation-share-head"><span>${shareLabel}</span><strong>${formatParticipationPercent(share)}%</strong></div>${renderParticipationMeter(share, 'participation-share-meter', shareLabel)}</div>`}
             </section>`;
+        }
+
+        function renderParticipationCalculationHelp(showShareFormula) {
+            return `<details class="participation-calculation-help">
+                <summary><i class="fa-solid fa-circle-info" aria-hidden="true"></i><span>計算方式</span></summary>
+                <div class="participation-calculation-help-body">
+                    <p><strong>活動整體參與率</strong>＝至少參加一場一般活動（不含一對一）的不重複學生數 ÷ 納入統計學生數 × 100%。</p>
+                    <p><strong>個別服務參與率</strong>＝至少接受一次一對一服務的不重複學生數 ÷ 納入統計學生數 × 100%。</p>
+                    <p><strong>人際、職涯、課業</strong>＝該類別至少參加一次的不重複學生數 ÷ 納入統計學生數 × 100%。活動卡只計算一般活動；個別服務卡只計算一對一服務。</p>
+                    ${showShareFormula ? '<p><strong>本個管學生占全體參與人數</strong>＝本個管名下參與該項服務的不重複學生數 ÷ 全體參與該項服務的不重複學生數 × 100%。</p>' : ''}
+                    <p class="participation-calculation-help-note">同一位學生參加多場同類別活動仍只計 1 人；若同時參與不同類別，會分別計入各類別，因此人際、職涯、課業不需加總為 100%。不列入統計的學生不計入分子及分母。</p>
+                </div>
+            </details>`;
         }
 
         function renderParticipationScope(analytics) {
@@ -3535,9 +3548,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 return `${scope}<div class="semester-overview-empty"><i class="fa-solid fa-circle-info" aria-hidden="true"></i>本學期負責學生皆設定為不列入統計，因此不顯示參與率。</div>`;
             }
             return `${scope}<div class="${options.modal ? 'participation-summary-grid' : 'participation-analytics-grid'}">
-                ${renderParticipationGroup('活動', 'fa-solid fa-users', analytics.activity, '占全體活動參與學生')}
-                ${renderParticipationGroup('個別服務', 'fa-solid fa-user-check', analytics.individualService, '占全體個別服務學生')}
-            </div>`;
+                ${renderParticipationGroup('活動整體參與率', 'fa-solid fa-users', analytics.activity, '本個管學生占全體活動參與人數', '至少參加一場活動')}
+                ${renderParticipationGroup('個別服務參與率', 'fa-solid fa-user-check', analytics.individualService, '本個管學生占全體個別服務人數', '至少接受一次個別服務')}
+            </div>${renderParticipationCalculationHelp(Boolean(analytics.counselor))}`;
         }
 
         function renderAdminParticipationAnalytics(data) {
