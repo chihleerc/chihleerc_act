@@ -5,6 +5,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             selectedEventIds: [], currentAdminEventId: null, currentRemarkStudent: null,
             tempTags: [], tempSessions: [], tempImages: [], tempImagesChanged: false, pendingEventCreateId: '', pendingAdminRegistrationId: '', adminCurrentPage: 1, editingRegId: null,
             events: [], eventStats: {}, counselors: [], counselorsLoaded: false, registrations: [], admins: [], logs: [], adminCreds: null, adminAddTempStudent: null, myRegistrations: [],
+            adminAddSearchResults: [],
             lineUsage: { month: '', used: 0, limit: 200, remaining: 200 }, dataQualityReport: null, archivePreview: null,
             lineDraftTimer: null, currentLineTemplateType: 'pre_event',
             studentIdentity: null, registeredEventIds: [], pendingRegistrationIds: {},
@@ -46,6 +47,11 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         document.addEventListener('keydown', event => {
+            if (event.key === 'Enter' && event.target && event.target.id === 'admin-add-sid') {
+                event.preventDefault();
+                verifyStudentForAdminAdd();
+                return;
+            }
             const openModals = [...document.querySelectorAll('[id^="modal-"]:not(.hidden)')];
             const modal = openModals.at(-1);
             if (!modal) return;
@@ -197,6 +203,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 'load-archive-preview': () => loadArchivePreview(),
                 'archive-year': () => archiveSelectedYear(),
                 'verify-admin-student': () => verifyStudentForAdminAdd(),
+                'select-admin-add-student': () => selectAdminAddStudent(target.dataset.studentId || ''),
                 'submit-admin-add': () => submitAdminAddParticipant(),
                 'safe-close-remark': () => safeCloseRemark(),
                 'save-admin-remark': () => saveAdminRemark(),
@@ -246,6 +253,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             }
             if (target.dataset.inputAction === 'mark-dirty') markDirty();
             if (target.dataset.inputAction === 'line-draft-autosave') scheduleLineDraftAutosave();
+            if (target.dataset.inputAction === 'admin-add-student-query') resetAdminAddStudentSelection();
         });
 
         document.addEventListener('change', event => {
@@ -512,9 +520,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         // 固定記錄這一版完成修改的時間，不會因登入、重新整理或查詢資料而改變。
-        const VERSION_LABEL = 'V11.21.26';
-        const VERSION_UPDATED_AT = '2026/11/02 09:30';
-        const VERSION_UPDATED_AT_ISO = '2026-11-02T09:30:00+08:00';
+        const VERSION_LABEL = 'V11.21.27';
+        const VERSION_UPDATED_AT = '2026/11/05 09:20';
+        const VERSION_UPDATED_AT_ISO = '2026-11-05T09:20:00+08:00';
         const API_TIMEOUT_MS = 20000;
         const LOGIN_TIMEOUT_MS = 25000;
         const ADMIN_DATA_TIMEOUT_MS = 45000;
@@ -4848,66 +4856,134 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             }, '確認刪除');
         }
 
-        function openAdminAddParticipantModal() {
-            document.getElementById('admin-add-sid').value = '';
+        function resetAdminAddStudentSelection() {
+            state.adminAddTempStudent = null;
+            state.adminAddSearchResults = [];
 
+            const resultsBox = document.getElementById('admin-add-search-results');
+            if (resultsBox) {
+                resultsBox.innerHTML = '';
+                resultsBox.classList.add('hidden');
+            }
             const infoBox = document.getElementById('admin-add-student-info');
-            infoBox.innerHTML = '';
-            infoBox.classList.remove('bg-blue-50', 'bg-red-50', 'bg-amber-50', 'border-blue-100', 'border-red-100', 'border-amber-200');
-            infoBox.classList.add('hidden');
+            if (infoBox) {
+                infoBox.innerHTML = '';
+                infoBox.classList.remove('bg-blue-50', 'bg-red-50', 'bg-amber-50', 'border-blue-100', 'border-red-100', 'border-amber-200');
+                infoBox.classList.add('hidden');
+            }
 
-            document.getElementById('admin-add-meals-container').classList.add('hidden');
-            document.getElementById('admin-add-meals').innerHTML = '';
+            const mealsContainer = document.getElementById('admin-add-meals-container');
+            const meals = document.getElementById('admin-add-meals');
+            if (mealsContainer) mealsContainer.classList.add('hidden');
+            if (meals) meals.innerHTML = '';
 
             const submitBtn = document.getElementById('btn-admin-submit-add');
-            submitBtn.disabled = true;
-            submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
-            submitBtn.innerHTML = '確認新增';
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                submitBtn.innerHTML = '確認新增';
+            }
+        }
 
-            state.adminAddTempStudent = null;
+        function renderAdminAddStudentSearchResults(students, truncated) {
+            const resultsBox = document.getElementById('admin-add-search-results');
+            if (!resultsBox) return;
+            state.adminAddSearchResults = Array.isArray(students) ? students : [];
+            if (state.adminAddSearchResults.length === 0) {
+                resultsBox.innerHTML = '<div class="px-3 py-3 text-sm text-gray-500">查無符合姓名或學號的學生。</div>';
+                resultsBox.classList.remove('hidden');
+                return;
+            }
+
+            const resultButtons = state.adminAddSearchResults.map(student => `
+                <button type="button" data-action="select-admin-add-student" data-student-id="${escapeHTML(student.id)}" class="w-full px-3 py-2.5 flex items-center justify-between gap-3 text-left border-b border-gray-100 last:border-b-0 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none transition">
+                    <span class="font-bold text-gray-800 break-words">${escapeHTML(student.name)}</span>
+                    <span class="font-mono text-sm text-gray-600 whitespace-nowrap">${escapeHTML(student.id)}</span>
+                </button>`).join('');
+            const truncatedNotice = truncated
+                ? '<div class="px-3 py-2 text-xs text-amber-700 bg-amber-50 border-t border-amber-100">結果超過 20 筆，請輸入更多姓名文字縮小範圍。</div>'
+                : '';
+            resultsBox.innerHTML = `<div class="max-h-60 overflow-y-auto">${resultButtons}</div>${truncatedNotice}`;
+            resultsBox.classList.remove('hidden');
+        }
+
+        function selectAdminAddStudent(studentId) {
+            const student = state.adminAddSearchResults.find(item => String(item.id) === String(studentId));
+            if (!student) return showToast('學生搜尋結果已失效，請重新搜尋', 'error');
+            const input = document.getElementById('admin-add-sid');
+            if (input) input.value = student.id;
+            const resultsBox = document.getElementById('admin-add-search-results');
+            if (resultsBox) resultsBox.classList.add('hidden');
+            verifyStudentForAdminAdd(student);
+        }
+
+        function openAdminAddParticipantModal() {
+            document.getElementById('admin-add-sid').value = '';
+            resetAdminAddStudentSelection();
+
             state.pendingAdminRegistrationId = createRequestId();
             openModal('modal-admin-add-participant');
         }
 
-        async function verifyStudentForAdminAdd() {
-            const sid = document.getElementById('admin-add-sid').value.trim();
-            if (!sid || !/^\d{8}$/.test(sid)) return showToast('請輸入 8 碼學號', 'error');
+        async function verifyStudentForAdminAdd(selectedStudent = null) {
+            const query = document.getElementById('admin-add-sid').value.trim();
+            if (!selectedStudent) {
+                if (!query) return showToast('請輸入姓名或 8 碼學號', 'error');
+                if (/^\d+$/.test(query) && !/^\d{8}$/.test(query)) return showToast('學號必須為 8 碼', 'error');
+                if (!/^\d+$/.test(query) && query.replace(/\s+/g, '').length < 2) return showToast('姓名請至少輸入 2 個字', 'error');
+            }
 
             const infoBox = document.getElementById('admin-add-student-info');
             const verifyButton = document.getElementById('btn-verify-admin-student');
-            let student = null;
+            let student = selectedStudent;
             let lookupFailureMessage = '';
+            let needsSelection = false;
+            let searchResultsTruncated = false;
 
-            verifyButton.disabled = true;
-            verifyButton.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i>驗證中';
-            const slowNotice = setTimeout(() => {
-                if (verifyButton.disabled) verifyButton.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i>Google 回應較慢，仍在查詢';
-            }, 5000);
-            try {
-                const result = await apiRequest({
-                    action: 'lookupStudentForAdminRegistration',
-                    sid,
-                    adminAcc: state.adminCreds.acc,
-                    adminToken: state.adminCreds.token
-                }, 15000);
-                if (checkTokenExpiration(result)) return;
-                if (result.success) student = result.data;
-                else if (result.code !== 'STUDENT_NOT_FOUND') {
-                    lookupFailureMessage = result.error || '學生資料驗證未完成';
-                    showToast('驗證失敗：' + lookupFailureMessage, 'error');
+            if (!selectedStudent) {
+                resetAdminAddStudentSelection();
+                verifyButton.disabled = true;
+                verifyButton.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i>搜尋中';
+                const slowNotice = setTimeout(() => {
+                    if (verifyButton.disabled) verifyButton.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i>仍在搜尋';
+                }, 5000);
+                try {
+                    const result = await apiRequest({
+                        action: 'searchStudentsForAdminRegistration',
+                        query,
+                        adminAcc: state.adminCreds.acc,
+                        adminToken: state.adminCreds.token
+                    }, 15000);
+                    if (checkTokenExpiration(result)) return;
+                    if (document.getElementById('admin-add-sid').value.trim() !== query) return;
+                    if (result.success) {
+                        const students = Array.isArray(result.data && result.data.students) ? result.data.students : [];
+                        searchResultsTruncated = Boolean(result.data && result.data.truncated);
+                        if (students.length === 1) {
+                            student = students[0];
+                            state.adminAddSearchResults = students;
+                            document.getElementById('admin-add-sid').value = student.id;
+                        } else {
+                            renderAdminAddStudentSearchResults(students, searchResultsTruncated);
+                            needsSelection = students.length > 1;
+                        }
+                    } else {
+                        lookupFailureMessage = result.error || '學生資料搜尋未完成';
+                        showToast('搜尋失敗：' + lookupFailureMessage, 'error');
+                    }
+                } catch (error) {
+                    lookupFailureMessage = getRequestErrorMessage(error, '學生資料搜尋未完成');
+                    showToast(`學生資料搜尋失敗：${lookupFailureMessage}`, 'error');
+                } finally {
+                    clearTimeout(slowNotice);
+                    verifyButton.disabled = false;
+                    verifyButton.innerText = '搜尋';
                 }
-            } catch (error) {
-                lookupFailureMessage = getRequestErrorMessage(error, '學生資料驗證未完成');
-                showToast(`學生資料驗證失敗：${lookupFailureMessage}`, 'error');
-            } finally {
-                clearTimeout(slowNotice);
-                verifyButton.disabled = false;
-                verifyButton.innerText = '驗證';
             }
 
             if (lookupFailureMessage) {
                 state.adminAddTempStudent = null;
-                infoBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-600 mr-1"></i> 驗證未完成：${escapeHTML(lookupFailureMessage)}。請稍後再按一次「驗證」。`;
+                infoBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-600 mr-1"></i> 搜尋未完成：${escapeHTML(lookupFailureMessage)}。請稍後再按一次「搜尋」。`;
                 infoBox.classList.remove('hidden', 'bg-blue-50', 'border-blue-100', 'bg-red-50', 'border-red-100');
                 infoBox.classList.add('bg-amber-50', 'border-amber-200');
                 document.getElementById('admin-add-meals-container').classList.add('hidden');
@@ -4915,6 +4991,16 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 document.getElementById('btn-admin-submit-add').classList.add('opacity-50', 'cursor-not-allowed');
                 return;
             }
+
+            if (needsSelection) {
+                const resultCountText = searchResultsTruncated ? '20 位以上' : `${state.adminAddSearchResults.length} 位`;
+                infoBox.innerHTML = `<i class="fa-solid fa-users text-blue-600 mr-1"></i> 找到 ${resultCountText}學生，請從搜尋結果選擇正確的人。`;
+                infoBox.classList.remove('hidden', 'bg-red-50', 'bg-amber-50', 'border-red-100', 'border-amber-200');
+                infoBox.classList.add('bg-blue-50', 'border-blue-100');
+                return;
+            }
+
+            const sid = student ? String(student.id || '').trim() : query;
 
             if (student) {
                 const isAlreadyRegistered = state.registrations.some(r => String(r.eventId) === String(state.currentAdminEventId) && String(r.studentId) === sid);
@@ -4997,7 +5083,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
 
             } else {
                 state.adminAddTempStudent = null;
-                infoBox.innerHTML = `<i class="fa-solid fa-circle-xmark text-red-500 mr-1"></i> 查無此學號，請先在 Google 試算表 Students 分頁建檔。`;
+                infoBox.innerHTML = `<i class="fa-solid fa-circle-xmark text-red-500 mr-1"></i> 查無符合姓名或學號的學生，請確認輸入內容，或先在 Google 試算表 Students 分頁建檔。`;
                 infoBox.classList.remove('hidden', 'bg-blue-50', 'bg-amber-50', 'border-blue-100', 'border-amber-200'); infoBox.classList.add('bg-red-50', 'border-red-100');
                 document.getElementById('admin-add-meals-container').classList.add('hidden');
                 document.getElementById('btn-admin-submit-add').disabled = true; document.getElementById('btn-admin-submit-add').classList.add('opacity-50', 'cursor-not-allowed');
