@@ -2280,7 +2280,7 @@
         .semester-overview-summary .is-rate { background: #fff9e8; border-color: #edd998; }
         .semester-overview-summary .is-rate strong { color: #956700; }
 
-        /* V11.21.30｜個管登入摘要視覺、圓環與比例長條修正 */
+        /* V11.21.31｜CSP 相容 SVG 比例長條 */
         .participation-analytics {
             margin: 0 1.4rem 1rem;
             padding: 1rem;
@@ -2380,15 +2380,17 @@
         .participation-category-head { display: flex; align-items: center; justify-content: space-between; gap: .7rem; margin-bottom: .25rem; color: #334e68; font-size: .75rem; font-weight: 850; }
         .participation-category-name { display: inline-flex; align-items: center; gap: .4rem; }
         .participation-category-name::before { width: .48rem; height: .48rem; content: ''; background: var(--participation-category-color); border-radius: 50%; }
-        .participation-category-meter { height: .48rem; overflow: hidden; background: #e5ebf1; border-radius: 999px; }
-        .participation-category-meter span { display: block; max-width: 100%; height: 100%; background: var(--participation-category-color); border-radius: inherit; }
+        .participation-category-meter { display: block; width: 100%; height: .48rem; overflow: visible; }
+        .participation-category-meter .participation-meter-track { fill: #e5ebf1; }
+        .participation-category-meter .participation-meter-fill { fill: var(--participation-category-color); }
         .participation-category.is-interpersonal { --participation-category-color: #159568; }
         .participation-category.is-career { --participation-category-color: #d69400; }
         .participation-category.is-academic { --participation-category-color: #cf326d; }
         .participation-share { margin-top: .85rem; padding-top: .75rem; border-top: 1px solid #e0e8ef; }
         .participation-share-head { display: flex; justify-content: space-between; gap: .7rem; color: #5c4c94; font-size: .72rem; font-weight: 850; }
-        .participation-share-meter { height: .42rem; margin-top: .28rem; overflow: hidden; background: #ebe7f7; border-radius: 999px; }
-        .participation-share-meter span { display: block; max-width: 100%; height: 100%; background: #7257c8; border-radius: inherit; }
+        .participation-share-meter { display: block; width: 100%; height: .42rem; margin-top: .28rem; overflow: visible; }
+        .participation-share-meter .participation-meter-track { fill: #ebe7f7; }
+        .participation-share-meter .participation-meter-fill { fill: #7257c8; }
 
         .participation-summary-dialog {
             width: min(58rem, 100%);

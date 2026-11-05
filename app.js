@@ -523,9 +523,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         // 固定記錄這一版完成修改的時間，不會因登入、重新整理或查詢資料而改變。
-        const VERSION_LABEL = 'V11.21.30';
-        const VERSION_UPDATED_AT = '2026/11/05 18:11';
-        const VERSION_UPDATED_AT_ISO = '2026-11-05T18:11:00+08:00';
+        const VERSION_LABEL = 'V11.21.31';
+        const VERSION_UPDATED_AT = '2026/11/05 18:26';
+        const VERSION_UPDATED_AT_ISO = '2026-11-05T18:26:00+08:00';
         const API_TIMEOUT_MS = 20000;
         const LOGIN_TIMEOUT_MS = 25000;
         const ADMIN_DATA_TIMEOUT_MS = 45000;
@@ -3467,13 +3467,22 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             return Number.isInteger(number) ? String(number) : number.toFixed(1);
         }
 
+        function renderParticipationMeter(value, className, label) {
+            const rate = clampParticipationPercent(value);
+            const safeLabel = escapeHTML(String(label || '參與率'));
+            return `<svg class="${className}" viewBox="0 0 100 8" preserveAspectRatio="none" role="progressbar" aria-label="${safeLabel} ${formatParticipationPercent(rate)}%" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${rate}">
+                <rect class="participation-meter-track" x="0" y="0" width="100" height="8" rx="4" ry="4"></rect>
+                <rect class="participation-meter-fill" x="0" y="0" width="${rate}" height="8" rx="4" ry="4"></rect>
+            </svg>`;
+        }
+
         function renderParticipationCategory(category, className, data) {
             const item = data && typeof data === 'object' ? data : {};
             const rate = clampParticipationPercent(item.participationRate);
             const count = Math.max(0, Number(item.participants) || 0);
             return `<div class="participation-category ${className}">
                 <div class="participation-category-head"><span class="participation-category-name">${category}</span><span>${count}人｜${formatParticipationPercent(rate)}%</span></div>
-                <div class="participation-category-meter" role="progressbar" aria-label="${category}參與率 ${formatParticipationPercent(rate)}%" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${rate}"><span style="width:${rate}%"></span></div>
+                ${renderParticipationMeter(rate, 'participation-category-meter', `${category}參與率`)}
             </div>`;
         }
 
@@ -3504,7 +3513,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     ${renderParticipationCategory('職涯', 'is-career', categories['職涯'])}
                     ${renderParticipationCategory('課業', 'is-academic', categories['課業'])}
                 </div>
-                ${share == null ? '' : `<div class="participation-share"><div class="participation-share-head"><span>${shareLabel}</span><strong>${formatParticipationPercent(share)}%</strong></div><div class="participation-share-meter" role="progressbar" aria-label="${shareLabel} ${formatParticipationPercent(share)}%" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${share}"><span style="width:${share}%"></span></div></div>`}
+                ${share == null ? '' : `<div class="participation-share"><div class="participation-share-head"><span>${shareLabel}</span><strong>${formatParticipationPercent(share)}%</strong></div>${renderParticipationMeter(share, 'participation-share-meter', shareLabel)}</div>`}
             </section>`;
         }
 
