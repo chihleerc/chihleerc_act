@@ -60,6 +60,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 if (modal.id === 'modal-edit-event') safeCloseEditEvent();
                 else if (modal.id === 'modal-remark') safeCloseRemark();
                 else if (modal.id === 'modal-notify') closeNotifyModal();
+                else if (modal.id === 'modal-participation-summary') closeParticipationSummary();
                 else closeModal(modal.id);
                 return;
             }
@@ -181,6 +182,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 'load-admin-dashboard': () => loadAdminDashboard(),
                 'reload-data': () => loadAdminDashboard(state.adminCurrentPage || 1, true),
                 'open-semester-overview': () => openAdminSemesterOverview(),
+                'close-participation-summary': () => closeParticipationSummary(),
+                'view-my-student-overview': () => viewMyStudentOverview(),
                 'open-student-term-roster': () => openAdminStudentTerms(),
                 'initialize-student-term-roster': () => initializeStudentTermRoster(),
                 'preview-student-term-rollover': () => previewStudentTermRollover(),
@@ -520,9 +523,9 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         // 固定記錄這一版完成修改的時間，不會因登入、重新整理或查詢資料而改變。
-        const VERSION_LABEL = 'V11.21.27';
-        const VERSION_UPDATED_AT = '2026/11/05 09:20';
-        const VERSION_UPDATED_AT_ISO = '2026-11-05T09:20:00+08:00';
+        const VERSION_LABEL = 'V11.21.28';
+        const VERSION_UPDATED_AT = '2026/11/05 14:30';
+        const VERSION_UPDATED_AT_ISO = '2026-11-05T14:30:00+08:00';
         const API_TIMEOUT_MS = 20000;
         const LOGIN_TIMEOUT_MS = 25000;
         const ADMIN_DATA_TIMEOUT_MS = 45000;
@@ -1119,6 +1122,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             if (restoreAdminSessionFromStorage()) {
                 switchView('teacherDashboard');
                 showToast(`${state.currentUserName} 的後台登入狀態已恢復`, 'success');
+                void loadLoginParticipationSummary();
                 return;
             }
             loadSavedStudentInfo();
@@ -2194,6 +2198,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     switchView('teacherDashboard');
                     showToast(`${user.name} 登入成功，可直接新增活動或載入管理清單`, 'success');
                     void apiRequest({ action: 'recordLogin', adminAcc: acc, adminToken: user.token }, 12000).catch(() => {});
+                    void loadLoginParticipationSummary();
                 } else {
                     if (errorMsgEl) { errorMsgEl.innerText = res.error || '帳號或密碼錯誤，請重新確認'; errorMsgEl.classList.remove('hidden'); }
                     showToast(res.error || '帳號或密碼錯誤', 'error');
@@ -3451,6 +3456,150 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             return `<span class="semester-overview-category-counts"><span><b class="is-interpersonal">人際</b>${Number(counts['人際']) || 0}場</span><i>｜</i><span><b class="is-academic">課業</b>${Number(counts['課業']) || 0}場</span><i>｜</i><span><b class="is-career">職涯</b>${Number(counts['職涯']) || 0}場</span></span>`;
         }
 
+        function clampParticipationPercent(value) {
+            const number = Number(value);
+            if (!Number.isFinite(number)) return 0;
+            return Math.max(0, Math.min(100, Math.round(number * 10) / 10));
+        }
+
+        function formatParticipationPercent(value) {
+            const number = clampParticipationPercent(value);
+            return Number.isInteger(number) ? String(number) : number.toFixed(1);
+        }
+
+        function renderParticipationCategory(category, className, data) {
+            const item = data && typeof data === 'object' ? data : {};
+            const rate = clampParticipationPercent(item.participationRate);
+            const count = Math.max(0, Number(item.participants) || 0);
+            return `<div class="participation-category ${className}">
+                <div class="participation-category-head"><span class="participation-category-name">${category}</span><span>${count}人｜${formatParticipationPercent(rate)}%</span></div>
+                <div class="participation-category-meter" role="progressbar" aria-label="${category}參與率 ${formatParticipationPercent(rate)}%" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${rate}"><span style="--participation-category-rate:${rate}%"></span></div>
+            </div>`;
+        }
+
+        function renderParticipationGroup(title, iconClass, group, shareLabel) {
+            const data = group && typeof group === 'object' ? group : {};
+            const rate = clampParticipationPercent(data.participationRate);
+            const participants = Math.max(0, Number(data.participants) || 0);
+            const denominator = Math.max(0, Number(data.denominator) || 0);
+            const categories = data.categories && typeof data.categories === 'object' ? data.categories : {};
+            const share = data.shareOfAllParticipants == null ? null : clampParticipationPercent(data.shareOfAllParticipants);
+            return `<section class="participation-group">
+                <h3><i class="${iconClass}" aria-hidden="true"></i>${title}</h3>
+                <div class="participation-group-overview">
+                    <div class="participation-ring" style="--participation-rate:${rate}%" role="img" aria-label="${title}整體參與率 ${formatParticipationPercent(rate)}%">
+                        <div class="participation-ring-content"><strong>${formatParticipationPercent(rate)}%</strong><span>整體參與率</span></div>
+                    </div>
+                    <div class="participation-count"><strong>${participants}／${denominator} 人</strong><span>${title === '活動' ? '至少參加一場活動' : '至少接受一次個別服務'}</span></div>
+                </div>
+                <div class="participation-categories">
+                    ${renderParticipationCategory('人際', 'is-interpersonal', categories['人際'])}
+                    ${renderParticipationCategory('職涯', 'is-career', categories['職涯'])}
+                    ${renderParticipationCategory('課業', 'is-academic', categories['課業'])}
+                </div>
+                ${share == null ? '' : `<div class="participation-share"><div class="participation-share-head"><span>${shareLabel}</span><strong>${formatParticipationPercent(share)}%</strong></div><div class="participation-share-meter" role="progressbar" aria-label="${shareLabel} ${formatParticipationPercent(share)}%" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${share}"><span style="--participation-share-rate:${share}%"></span></div></div>`}
+            </section>`;
+        }
+
+        function renderParticipationScope(analytics) {
+            const reasons = analytics && analytics.exclusionReasons && typeof analytics.exclusionReasons === 'object'
+                ? analytics.exclusionReasons : {};
+            const reasonText = ['校外實習', '白天工作', '休養', '其他']
+                .filter(reason => Number(reasons[reason]) > 0)
+                .map(reason => `${reason} ${Number(reasons[reason])}人`)
+                .join('｜');
+            return `<div class="participation-scope"><strong>本學期統計範圍</strong><span>原名冊 ${Number(analytics.rosterStudents) || 0}人</span><span>不列入統計 ${Number(analytics.excludedStudents) || 0}人</span><span>納入統計 ${Number(analytics.includedStudents) || 0}人</span>${reasonText ? `<span>${escapeHTML(reasonText)}</span>` : ''}</div>`;
+        }
+
+        function renderParticipationAnalyticsContent(analytics, options = {}) {
+            if (!analytics || analytics.hasAssignedStudents !== true) return '';
+            const scope = renderParticipationScope(analytics);
+            if (Number(analytics.includedStudents) <= 0) {
+                return `${scope}<div class="semester-overview-empty"><i class="fa-solid fa-circle-info" aria-hidden="true"></i>本學期負責學生皆設定為不列入統計，因此不顯示參與率。</div>`;
+            }
+            return `${scope}<div class="${options.modal ? 'participation-summary-grid' : 'participation-analytics-grid'}">
+                ${renderParticipationGroup('活動', 'fa-solid fa-users', analytics.activity, '占全體活動參與學生')}
+                ${renderParticipationGroup('個別服務', 'fa-solid fa-user-check', analytics.individualService, '占全體個別服務學生')}
+            </div>`;
+        }
+
+        function renderAdminParticipationAnalytics(data) {
+            const panel = document.getElementById('admin-participation-analytics');
+            if (!panel) return;
+            if (state.currentUserRole !== 'admin' || !data || !data.analytics) {
+                panel.innerHTML = '';
+                panel.classList.add('hidden');
+                return;
+            }
+            const analytics = data.analytics;
+            const counselorLabel = analytics.counselor ? `${escapeHTML(analytics.counselor)}的統計` : '全體統計';
+            const content = renderParticipationAnalyticsContent(analytics);
+            panel.innerHTML = `<h3 class="participation-analytics-title"><i class="fa-solid fa-chart-pie" aria-hidden="true"></i>${counselorLabel}</h3>${content || '<div class="semester-overview-empty">目前範圍沒有可分析的學生資料</div>'}`;
+            panel.classList.remove('hidden');
+        }
+
+        function getParticipationSummaryStorageKey() {
+            const account = state.adminCreds && state.adminCreds.acc ? String(state.adminCreds.acc) : '';
+            return `chihlee_participation_summary_hidden_${encodeURIComponent(account)}`;
+        }
+
+        function getTaipeiDateKey() {
+            const { year, month, day } = getTaipeiCalendarParts();
+            return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        }
+
+        function isParticipationSummaryHiddenToday() {
+            try { return localStorage.getItem(getParticipationSummaryStorageKey()) === getTaipeiDateKey(); }
+            catch (error) { return false; }
+        }
+
+        function closeParticipationSummary() {
+            const hideToday = document.getElementById('participation-summary-hide-today');
+            try {
+                if (hideToday && hideToday.checked) localStorage.setItem(getParticipationSummaryStorageKey(), getTaipeiDateKey());
+            } catch (error) {}
+            closeModal('modal-participation-summary');
+        }
+
+        function viewMyStudentOverview() {
+            closeParticipationSummary();
+            openAdminSemesterOverview();
+        }
+
+        async function loadLoginParticipationSummary() {
+            if (!state.adminCreds || state.currentUserRole !== 'staff' || isParticipationSummaryHiddenToday()) return;
+            const content = document.getElementById('participation-summary-content');
+            const hideToday = document.getElementById('participation-summary-hide-today');
+            const range = getAdminStudentLookupPresetRange('semester');
+            try {
+                const response = await apiRequest({
+                    action: 'getAdminSemesterOverview',
+                    startDate: range.startDate,
+                    endDate: range.endDate,
+                    counselor: state.currentUserName,
+                    status: 'all',
+                    excludeOneOnOne: false,
+                    excludeSpecial: true,
+                    search: '',
+                    page: 1,
+                    summaryOnly: true,
+                    adminAcc: state.adminCreds.acc,
+                    adminToken: state.adminCreds.token
+                }, 30000);
+                if (checkTokenExpiration(response)) return;
+                if (!response.success || !response.data || !response.data.analytics) return;
+                const analytics = response.data.analytics;
+                // 無個管學生者完全不顯示視窗，也不以 0% 誤導使用者。
+                if (analytics.hasAssignedStudents !== true) return;
+                if (content) content.innerHTML = renderParticipationAnalyticsContent(analytics, { modal: true });
+                if (hideToday) hideToday.checked = false;
+                openModal('modal-participation-summary');
+            } catch (error) {
+                // 統計摘要是登入後的附加資訊；讀取失敗不得阻擋後台操作或顯示登入失敗。
+                console.warn('[participation-summary unavailable]', error);
+            }
+        }
+
         function getSemesterOverviewPeriodLabel() {
             const yearSelect = document.getElementById('admin-semester-overview-year');
             const rangeSelect = document.getElementById('admin-semester-overview-range');
@@ -3473,6 +3622,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             if (!summaryEl || !tbody || !paginationEl || !statusEl) return;
 
             populateSemesterOverviewCounselors(data.filters || {});
+            renderAdminParticipationAnalytics(data);
             summaryEl.innerHTML = `
                 <div><span>負責學生</span><strong>${Number(summary.totalStudents) || 0}</strong><small>人</small></div>
                 <div class="is-registered"><span>有參加活動</span><strong>${Number(summary.registeredStudents) || 0}</strong><small>人</small></div>

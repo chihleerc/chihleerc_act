@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 致理．心夥伴 - 活動報名系統｜後台學生多重搜尋版 V11.21.27｜2026-11-05 -->
+<!-- 致理．心夥伴 - 活動報名系統｜學期參與分析版 V11.21.28｜2026-11-05 -->
 <html lang="zh-TW" class="frame-guard-pending">
 <head>
     <meta charset="UTF-8">
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
 
-    <link rel="stylesheet" href="app-custom.css?v=11.21.27-202611050920">
+    <link rel="stylesheet" href="app-custom.css?v=11.21.28-202611051430">
 
 </head>
 <body class="text-gray-800 antialiased min-h-screen flex flex-col relative w-full">
@@ -389,6 +389,7 @@
                         <button id="admin-semester-overview-submit" type="submit" class="semester-overview-submit"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>查詢</button>
                     </form>
                     <div id="admin-semester-overview-status" class="semester-overview-message" role="status" aria-live="polite">正在準備本學期報名概況。</div>
+                    <section id="admin-participation-analytics" class="participation-analytics hidden" aria-label="管理員本學期參與分析"></section>
                     <div id="admin-semester-overview-summary" class="semester-overview-summary hidden"></div>
                     <div class="semester-overview-table-wrap custom-scroll">
                         <table class="semester-overview-table">
@@ -941,6 +942,25 @@
         </div>
     </div>
 
+    <!-- Modal: 個管老師本學期參與摘要。無負責學生時不開啟。 -->
+    <div id="modal-participation-summary" class="fixed inset-0 bg-black bg-opacity-60 z-[90] hidden flex items-center justify-center p-2 md:p-4">
+        <div class="participation-summary-dialog" role="document">
+            <header class="participation-summary-header">
+                <h2><i class="fa-solid fa-chart-line" aria-hidden="true"></i>本學期參與摘要</h2>
+                <button type="button" data-action="close-participation-summary" aria-label="關閉本學期參與摘要"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+            </header>
+            <div id="participation-summary-content" class="participation-summary-content" aria-live="polite"></div>
+            <p class="participation-summary-note">活動與個別服務分開計算；同一位學生可同時參與不同類別，因此人際、職涯、課業不需加總為100%。</p>
+            <footer class="participation-summary-footer">
+                <label><input id="participation-summary-hide-today" type="checkbox"><span>今天不再顯示</span></label>
+                <div>
+                    <button type="button" data-action="close-participation-summary" class="participation-summary-secondary">關閉</button>
+                    <button type="button" data-action="view-my-student-overview" class="participation-summary-primary">查看我的學生名單</button>
+                </div>
+            </footer>
+        </div>
+    </div>
+
     <!-- Modal: 確認操作 (警告視窗) -->
     <div id="modal-confirm" class="fixed inset-0 bg-black bg-opacity-60 z-[100] hidden flex items-center justify-center p-4">
         <div class="bg-white p-6 md:p-8 rounded-2xl shadow-2xl w-full max-w-sm md:max-w-md animate-fade-in border-t-8 border-red-500 mx-2">
@@ -964,7 +984,7 @@
         <div id="loader-elapsed" class="loader-elapsed" aria-live="off"></div>
     </div>
 
-    <script src="app.js?v=11.21.27-202611050920" defer></script>
+    <script src="app.js?v=11.21.28-202611051430" defer></script>
 
 </body>
 </html>
