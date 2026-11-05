@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- 致理．心夥伴 - 活動報名系統｜參與率名稱與計算說明修正版 V11.21.32｜2026-11-05 -->
+<!-- 致理．心夥伴 - 活動報名系統｜後台首頁與場次排序修正版 V11.21.33｜2026-11-05 -->
 <html lang="zh-TW" class="frame-guard-pending">
 <head>
     <meta charset="UTF-8">
@@ -21,7 +21,7 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
 
-    <link rel="stylesheet" href="app-custom.css?v=11.21.32-202611051844">
+    <link rel="stylesheet" href="app-custom.css?v=11.21.33-202611052008">
 
 </head>
 <body class="text-gray-800 antialiased min-h-screen flex flex-col relative w-full">
@@ -202,9 +202,19 @@
 
         <!-- 系統後台：主控台 -->
         <div id="view-teacher-dashboard" class="hidden animate-fade-in w-full px-1">
+            <div id="admin-tabs-bar" class="hidden flex space-x-2 md:space-x-4 mb-4 md:mb-6 border-b pb-2 overflow-x-auto no-scrollbar whitespace-nowrap">
+                <button id="tabAdminHome" data-action="switch-admin-tab" data-tab="home" class="font-bold text-gray-800 border-b-2 border-chihlee-blue pb-1 px-2 transition text-sm md:text-base">後台首頁</button>
+                <button id="tabActivityList" data-action="switch-admin-tab" data-tab="list" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">活動列表</button>
+                <button id="tabStudentLookup" data-action="switch-admin-tab" data-tab="studentLookup" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">學生報名查詢</button>
+                <button id="tabSemesterOverview" data-action="switch-admin-tab" data-tab="semesterOverview" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">學期報名概況</button>
+                <button id="tabStudentTerms" data-action="switch-admin-tab" data-tab="studentTerms" class="admin-only-student-terms hidden text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">學期名冊管理</button>
+                <button id="tabActivityLog" data-action="switch-admin-tab" data-tab="log" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">動態紀錄</button>
+                <button id="tabDataQuality" data-action="switch-admin-tab" data-tab="quality" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">資料檢查</button>
+            </div>
+
             <section id="admin-entry-panel" class="admin-entry-panel hidden" aria-labelledby="admin-entry-title">
                 <div>
-                    <span class="admin-entry-eyebrow"><i class="fa-solid fa-gauge-high" aria-hidden="true"></i>快速入口</span>
+                    <span class="admin-entry-eyebrow"><i class="fa-solid fa-gauge-high" aria-hidden="true"></i>操作選單</span>
                     <h2 id="admin-entry-title">今天要做什麼？</h2>
                     <p>登入已完成。新增活動不必先等待完整活動與報名資料。</p>
                 </div>
@@ -214,17 +224,9 @@
                     <button type="button" data-action="open-student-registration-lookup"><i class="fa-solid fa-user-check" aria-hidden="true"></i><span>查詢學生報名</span><small>依學號與日期區間查詢</small></button>
                     <button type="button" data-action="open-semester-overview"><i class="fa-solid fa-chart-column" aria-hidden="true"></i><span>學期報名概況</span><small>查看個管學生已報名與未報名情形</small></button>
                     <button type="button" data-action="open-student-term-roster" class="admin-only-student-terms hidden"><i class="fa-solid fa-users-gear" aria-hidden="true"></i><span>學期名冊管理</span><small>批次建立名冊與設定統計排除</small></button>
+                    <a class="admin-entry-action" href="https://script.google.com/a/macros/gm.chihlee.edu.tw/s/AKfycbwM5CMRH0efoRGijhkQnP9L3osc92Sd6YkoLF9XwLe-piv3kA5_ZMpeCayQr8wQXl_7cQ/exec" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i><span>製作領據與專家資料表</span><small>開啟領據及專家資料製作頁</small></a>
                 </div>
             </section>
-
-            <div id="admin-tabs-bar" class="hidden flex space-x-2 md:space-x-4 mb-4 md:mb-6 border-b pb-2 overflow-x-auto no-scrollbar whitespace-nowrap">
-                <button id="tabActivityList" data-action="switch-admin-tab" data-tab="list" class="font-bold text-gray-800 border-b-2 border-chihlee-blue pb-1 px-2 transition text-sm md:text-base">活動列表</button>
-                <button id="tabStudentLookup" data-action="switch-admin-tab" data-tab="studentLookup" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">學生報名查詢</button>
-                <button id="tabSemesterOverview" data-action="switch-admin-tab" data-tab="semesterOverview" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">學期報名概況</button>
-                <button id="tabStudentTerms" data-action="switch-admin-tab" data-tab="studentTerms" class="admin-only-student-terms hidden text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">學期名冊管理</button>
-                <button id="tabActivityLog" data-action="switch-admin-tab" data-tab="log" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">動態紀錄</button>
-                <button id="tabDataQuality" data-action="switch-admin-tab" data-tab="quality" class="text-gray-500 hover:text-gray-800 pb-1 px-2 transition text-sm md:text-base">資料檢查</button>
-            </div>
 
             <!-- 骨架屏載入 (後台用) -->
             <div id="skeleton-admin" class="hidden space-y-4 max-w-full">
@@ -852,7 +854,7 @@
     <!-- Modal: 編輯報名備註與餐點 -->
     <div id="modal-remark" class="fixed inset-0 bg-black bg-opacity-60 z-[70] hidden flex items-center justify-center p-2 md:p-4">
         <div class="bg-white p-5 md:p-6 rounded-xl shadow-2xl w-full max-w-md animate-fade-in max-h-[95vh] overflow-y-auto custom-scroll mx-2">
-            <h4 class="font-bold text-lg text-chihlee-blue mb-2">編輯報名與備註</h4>
+            <h4 class="remark-modal-title font-bold text-lg text-chihlee-blue mb-2">編輯報名與備註</h4>
             <p class="text-sm text-gray-500 mb-4 break-words" id="remark-student-info"></p>
             <div data-input-action="mark-dirty" data-change-action="mark-dirty">
                 <div id="admin-remark-meals" class="mb-4"></div>
@@ -983,7 +985,7 @@
         <div id="loader-elapsed" class="loader-elapsed" aria-live="off"></div>
     </div>
 
-    <script src="app.js?v=11.21.32-202611051844" defer></script>
+    <script src="app.js?v=11.21.33-202611052008" defer></script>
 
 </body>
 </html>

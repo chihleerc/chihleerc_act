@@ -11,7 +11,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             studentIdentity: null, registeredEventIds: [], pendingRegistrationIds: {},
             eventCounts: new Map(), calendarYear: null, calendarMonth: null, calendarSelectedDate: '',
             publicPage: 0, publicHasMore: false, publicTotal: 0, publicCategoryCounts: {}, publicLoadingMore: false,
-            adminDataLoaded: false, adminLogsLoaded: false, calendarFullDataLoaded: false, adminStudentLookupInitialized: false, adminSemesterOverviewInitialized: false,
+            adminDataLoaded: false, adminLogsLoaded: false, calendarFullDataLoaded: false, adminCurrentTab: 'home', adminTabsRevealed: false, adminStudentLookupInitialized: false, adminSemesterOverviewInitialized: false,
             adminSemesterOverviewPage: 1, adminStudentTermsInitialized: false, adminStudentTermsPage: 1, adminStudentTermsRolloverPlan: null,
             adminPagination: { page: 1, pageSize: 5, total: 0, totalPages: 1, scope: 'upcoming' },
             adminFilterOptions: { years: [], teachers: [] },
@@ -517,15 +517,15 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 document.getElementById('skeleton-student').classList.add('hidden'); document.getElementById('student-main-content').classList.remove('hidden');
                 if(state.isTeacherLoggedIn) {
                     document.getElementById('skeleton-admin').classList.add('hidden');
-                    document.getElementById('adminActivitySection').classList.toggle('hidden', !state.adminDataLoaded);
+                    document.getElementById('adminActivitySection').classList.toggle('hidden', state.adminCurrentTab !== 'list' || !state.adminDataLoaded);
                 }
             }
         }
 
         // 固定記錄這一版完成修改的時間，不會因登入、重新整理或查詢資料而改變。
-        const VERSION_LABEL = 'V11.21.32';
-        const VERSION_UPDATED_AT = '2026/11/05 18:26';
-        const VERSION_UPDATED_AT_ISO = '2026-11-05T18:26:00+08:00';
+        const VERSION_LABEL = 'V11.21.33';
+        const VERSION_UPDATED_AT = '2026/11/05 20:08';
+        const VERSION_UPDATED_AT_ISO = '2026-11-05T20:08:00+08:00';
         const API_TIMEOUT_MS = 20000;
         const LOGIN_TIMEOUT_MS = 25000;
         const ADMIN_DATA_TIMEOUT_MS = 45000;
@@ -1958,17 +1958,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                         updateEventCounts();
                     }
                     document.getElementById('view-teacher-dashboard').classList.remove('hidden');
-                    document.getElementById('admin-entry-panel').classList.toggle('hidden', state.adminDataLoaded);
-                    document.getElementById('admin-tabs-bar').classList.toggle('hidden', !state.adminDataLoaded);
-                    if (state.adminDataLoaded) { switchAdminTab('list'); renderTeacherDashboard(); }
-                    else {
-                        document.getElementById('adminActivitySection').classList.add('hidden');
-                        document.getElementById('adminStudentLookupSection').classList.add('hidden');
-                        document.getElementById('adminSemesterOverviewSection').classList.add('hidden');
-                        document.getElementById('adminStudentTermsSection').classList.add('hidden');
-                        document.getElementById('adminLogSection').classList.add('hidden');
-                        document.getElementById('adminDataQualitySection').classList.add('hidden');
-                    }
+                    document.getElementById('admin-tabs-bar').classList.toggle('hidden', !state.adminTabsRevealed);
+                    switchAdminTab('home');
                 }
                 else document.getElementById('view-teacher-login').classList.remove('hidden');
                 document.getElementById('nav-teacher-btn').className = "px-2 md:px-3 py-1.5 md:py-2 rounded-md text-xs md:text-sm font-medium bg-chihlee-red text-white shadow transition whitespace-nowrap shrink-0";
@@ -2078,6 +2069,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             if (!state.adminCreds) return;
             const silent = options && options.silent === true;
             const requestSequence = ++adminDataRequestSequence;
+            state.adminTabsRevealed = true;
+            document.getElementById('admin-tabs-bar').classList.remove('hidden');
             document.getElementById('admin-entry-panel').classList.add('hidden');
             if (!silent && !state.adminDataLoaded) showSkeletonLoading(true);
             if (!silent) {
@@ -2133,7 +2126,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                 return true;
             } catch (error) {
                 if (requestSequence !== adminDataRequestSequence) return false;
-                if (!state.adminDataLoaded) document.getElementById('admin-entry-panel').classList.remove('hidden');
+                if (!state.adminDataLoaded) switchAdminTab('home');
                 if (!silent) showToast(`暫時無法載入管理資料：${getRequestErrorMessage(error)}。登入狀態已保留，可重試或先使用「快速新增活動」。`, 'error');
                 return false;
             } finally {
@@ -2177,6 +2170,8 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     state.currentUserRole = user.role;
                     state.currentUserName = user.name;
                     state.adminDataLoaded = false;
+                    state.adminCurrentTab = 'home';
+                    state.adminTabsRevealed = false;
                     state.adminLogsLoaded = false;
                     state.admins = [{ name: user.name }];
                     state.publicEventsSnapshot = state.events.slice();
@@ -2232,7 +2227,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             }
             state.adminCreds = null; state.isTeacherLoggedIn = false; state.currentUserRole = null; state.currentUserName = null;
             sessionStorage.removeItem(ADMIN_SESSION_STORAGE_KEY);
-            state.adminDataLoaded = false; state.adminLogsLoaded = false; state.adminStudentLookupInitialized = false; state.adminSemesterOverviewInitialized = false; state.adminStudentTermsInitialized = false;
+            state.adminDataLoaded = false; state.adminLogsLoaded = false; state.adminCurrentTab = 'home'; state.adminTabsRevealed = false; state.adminStudentLookupInitialized = false; state.adminSemesterOverviewInitialized = false; state.adminStudentTermsInitialized = false;
             state.adminStudentTermsPage = 1; state.adminStudentTermsRolloverPlan = null;
             state.adminPageEvents = []; state.adminPageEventStats = {}; state.publicEventsSnapshot = []; state.publicEventStatsSnapshot = {};
             resetAdminStudentLookup();
@@ -3147,12 +3142,17 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
         }
 
         function switchAdminTab(tab) {
+            if (tab !== 'home') {
+                state.adminTabsRevealed = true;
+                document.getElementById('admin-tabs-bar').classList.remove('hidden');
+            }
             if (tab === 'list' && !state.adminDataLoaded) {
                 void loadAdminDashboard();
                 return;
             }
+            state.adminCurrentTab = tab;
             const entryPanel = document.getElementById('admin-entry-panel');
-            if (entryPanel) entryPanel.classList.add('hidden');
+            if (entryPanel) entryPanel.classList.toggle('hidden', tab !== 'home');
             document.getElementById('adminActivitySection').classList.toggle('hidden', tab !== 'list');
             document.getElementById('adminStudentLookupSection').classList.toggle('hidden', tab !== 'studentLookup');
             document.getElementById('adminSemesterOverviewSection').classList.toggle('hidden', tab !== 'semesterOverview');
@@ -3163,6 +3163,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
             const activeTabClass = 'font-bold text-gray-800 border-b-2 border-chihlee-blue pb-1 px-2 transition whitespace-nowrap text-sm md:text-base';
             const defaultTabClass = 'text-gray-500 hover:text-gray-800 pb-1 px-2 transition whitespace-nowrap text-sm md:text-base';
 
+            document.getElementById('tabAdminHome').className = tab === 'home' ? activeTabClass : defaultTabClass;
             document.getElementById('tabActivityList').className = tab === 'list' ? activeTabClass : defaultTabClass;
             document.getElementById('tabStudentLookup').className = tab === 'studentLookup' ? activeTabClass : defaultTabClass;
             document.getElementById('tabSemesterOverview').className = tab === 'semesterOverview' ? activeTabClass : defaultTabClass;
@@ -3668,7 +3669,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
                     const sessions = Array.isArray(student.sessions) ? student.sessions : [];
                     const visibleSessions = sessions.slice(0, 3).map(renderSemesterOverviewSession).join('');
                     const moreSessions = sessions.length > 3
-                        ? `<details class="semester-overview-more"><summary>再顯示 ${sessions.length - 3} 場</summary>${sessions.slice(3).map(renderSemesterOverviewSession).join('')}</details>`
+                        ? `<details class="semester-overview-more"><summary><span class="semester-overview-more-collapsed">再顯示 ${sessions.length - 3} 場</span><span class="semester-overview-more-expanded">收合其他 ${sessions.length - 3} 場</span></summary>${sessions.slice(3).map(renderSemesterOverviewSession).join('')}</details>`
                         : '';
                     const activityHtml = sessions.length
                         ? `${visibleSessions}${moreSessions}`
@@ -5426,7 +5427,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzrP7o2yOFeXBi2eqjK
 
             let htmlStr = '<label class="block text-sm font-bold text-gray-700 mb-1">場次參與與餐點修正</label>';
             const isSingleChoice = requiresSingleSessionChoice(ev);
-            htmlStr += ev.sessions.map((sess, idx) => {
+            htmlStr += getChronologicalSessionItems(ev.sessions).map(({ session: sess, originalIndex: idx }) => {
                 const d = sData.find(x => x.date === sess.date && (x.time === sess.time || !x.time)) || { date: sess.date, time: sess.time, attend: false, meal: '不用餐' };
 
                 const isTakenByOthers = ev.isOneOnOne && takenOooSessions.includes(d.date + '_' + (d.time || '')) && !d.attend;
